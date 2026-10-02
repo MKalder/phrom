@@ -1,0 +1,29 @@
+{
+  "name": "phrom",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "**An AI agent to prepare GitHub issues for backlog refinement.**",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MKalder/phrom.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MKalder/phrom/issues"
+  },
+  "homepage": "https://github.com/MKalder/phrom#readme",
+  "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "dotenv": "^18.0.5",
+    "ollama": "^0.6.4"
+  }
+}

@@ -1,4 +1,7 @@
 # folder
 docs-de
 de
+node_modules
 
+# Env
+.env
