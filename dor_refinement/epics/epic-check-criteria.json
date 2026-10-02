@@ -1,0 +1,97 @@
+{
+  "version": "0.1.0",
+  "artifactType": "epic-check-criteria",
+  "scope": "Pre-refinement assessment of epic clarity and boundaries. It does not replace discovery, prioritization, or team estimation.",
+  "assessmentRules": {
+    "requireEvidence": true,
+    "resultValues": [
+      "pass",
+      "flag",
+      "not-assessable"
+    ]
+  },
+  "criteria": [
+    {
+      "id": "epic-context",
+      "check": "code",
+      "required": true,
+      "description": "Names at least product and target group; operator and platforms are recommended.",
+      "passCondition": "Product and target group are stated in structured context or clearly stated prose."
+    },
+    {
+      "id": "epic-goal",
+      "check": "model",
+      "required": true,
+      "description": "States an outcome-oriented goal.",
+      "passCondition": "The goal identifies a user or business outcome and is not merely a technology or activity label."
+    },
+    {
+      "id": "epic-benefit",
+      "check": "model",
+      "required": true,
+      "description": "States an intended benefit.",
+      "passCondition": "The model can quote the intended benefit without inventing one."
+    },
+    {
+      "id": "epic-boundary",
+      "check": "code",
+      "required": true,
+      "description": "Has an explicit in-scope and out-of-scope boundary.",
+      "passCondition": "Both sections are present and contain at least one meaningful item."
+    },
+    {
+      "id": "epic-success-measure",
+      "check": "model",
+      "required": false,
+      "description": "Provides a measurable outcome or explicitly flags that a baseline/target still needs product validation.",
+      "passCondition": "A measure is stated without fabricated certainty, or the missing measurement is transparently flagged."
+    },
+    {
+      "id": "epic-slicing",
+      "check": "model",
+      "required": true,
+      "description": "Can be broken into independently discussable candidate stories or thin vertical slices.",
+      "passCondition": "The model proposes or validates at least two distinct user-value slices, with evidence from the epic."
+    },
+    {
+      "id": "epic-oversize-risk",
+      "check": "model",
+      "required": true,
+      "description": "Flags programme-level scope disguised as an epic.",
+      "passCondition": "The scope has a coherent product boundary; otherwise the output explains the risk and suggests a split."
+    }
+  ],
+  "examples": [
+    {
+      "classification": "good-control",
+      "title": "Invoice self-service",
+      "summary": "Outcome, benefit, scope boundaries, candidate stories, and a deliberately cautious success-measure statement are present.",
+      "expectedFlags": []
+    },
+    {
+      "classification": "weak",
+      "title": "Modernize the portal",
+      "body": "The customer portal should be modern and better.",
+      "expectedFlags": [
+        "epic-context",
+        "epic-goal",
+        "epic-benefit",
+        "epic-boundary",
+        "epic-success-measure",
+        "epic-slicing",
+        "epic-oversize-risk"
+      ]
+    },
+    {
+      "classification": "oversized",
+      "title": "Digital customer experience",
+      "body": "Build web and mobile experiences for onboarding, billing, payments, support, notifications, profile management, and all account changes for every customer segment.",
+      "expectedFlags": [
+        "epic-boundary",
+        "epic-slicing",
+        "epic-oversize-risk"
+      ],
+      "expectedObservation": "Programme-level scope across multiple domains and platforms; recommend split by customer outcome or product domain."
+    }
+  ]
+}

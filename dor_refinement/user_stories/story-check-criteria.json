@@ -1,0 +1,123 @@
+{
+  "version": "0.1.0",
+  "artifactType": "story-check-criteria",
+  "scope": "Pre-refinement quality assessment. This is not a Definition of Done and does not decide sprint readiness.",
+  "assessmentRules": {
+    "requireEvidence": true,
+    "resultValues": [
+      "pass",
+      "flag",
+      "not-assessable"
+    ],
+    "sizingDisclaimer": "Size is a risk signal, not a story-point estimate or a commitment by the development team."
+  },
+  "criteria": [
+    {
+      "id": "story-format",
+      "check": "code",
+      "required": true,
+      "description": "Contains the pattern 'As a ... I want ... so that ...' in title or body.",
+      "passCondition": "A role, goal, and benefit can be extracted."
+    },
+    {
+      "id": "context",
+      "check": "code",
+      "required": true,
+      "description": "Names at least product and target group; operator, platforms, and parent epic are recommended.",
+      "passCondition": "Product and target group are present in structured context or clearly stated prose."
+    },
+    {
+      "id": "epic-link",
+      "check": "code",
+      "required": true,
+      "description": "References a parent epic.",
+      "passCondition": "A stable epic issue reference or explicit epic identifier is present."
+    },
+    {
+      "id": "ac-presence",
+      "check": "code",
+      "required": true,
+      "description": "Contains acceptance criteria.",
+      "passCondition": "At least one explicit happy-path scenario and one relevant negative, empty-state, authorization, or error scenario are present. No fixed total number is required."
+    },
+    {
+      "id": "ac-testability",
+      "check": "model",
+      "required": true,
+      "description": "Acceptance criteria describe observable, testable outcomes.",
+      "passCondition": "Each criterion has a meaningful condition, action or trigger, and verifiable outcome. Vague terms are either defined or flagged.",
+      "vagueTerms": [
+        "easy",
+        "fast",
+        "better",
+        "appropriate",
+        "user-friendly",
+        "quickly",
+        "timely",
+        "modern",
+        "high quality"
+      ]
+    },
+    {
+      "id": "value",
+      "check": "model",
+      "required": true,
+      "description": "The intended user and benefit are explicit and coherent.",
+      "passCondition": "The model quotes the role and benefit from the item; it must not invent business value."
+    },
+    {
+      "id": "independence",
+      "check": "hybrid",
+      "required": false,
+      "description": "No material duplicate or overlap with candidate stories.",
+      "passCondition": "Similarity search finds no same-goal candidate, or the model explains a material distinction with evidence."
+    },
+    {
+      "id": "size-risk",
+      "check": "model",
+      "required": true,
+      "description": "Flags signs that the item is likely too broad for a single sprint.",
+      "passCondition": "No broadness indicators are present, or any conclusion explicitly remains a risk signal.",
+      "indicators": [
+        "Multiple independent user goals or roles",
+        "Multiple products, platforms, systems, or integrations",
+        "Several independently releasable capabilities joined by 'and' or 'or'",
+        "Words such as 'all', 'complete', 'entire', or 'end-to-end' without a narrow boundary",
+        "A scope that cannot be described as one thin vertical slice"
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "classification": "good-control",
+      "title": "Download invoice as PDF",
+      "summary": "One customer goal with a clear benefit, contextual information, an epic link, and testable happy-path plus negative/authorization scenarios.",
+      "expectedFlags": []
+    },
+    {
+      "classification": "weak",
+      "title": "Improve login",
+      "body": "The login should be better.",
+      "expectedFlags": [
+        "story-format",
+        "context",
+        "epic-link",
+        "ac-presence",
+        "value",
+        "ac-testability"
+      ]
+    },
+    {
+      "classification": "oversized",
+      "title": "Manage account settings",
+      "body": "As a customer, I want to manage my profile, notification preferences, payment method, and security settings so that my account is up to date.",
+      "expectedFlags": [
+        "context",
+        "epic-link",
+        "ac-presence",
+        "size-risk"
+      ],
+      "expectedObservation": "Several independently releasable capabilities; suggest slicing, do not estimate story points."
+    }
+  ]
+}
