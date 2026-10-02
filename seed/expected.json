@@ -1,0 +1,120 @@
+[
+  {
+    "issue": 1,
+    "type": "epic",
+    "expectedFindings": [],
+    "expectedProposal": "none",
+    "note": "good-control-epic"
+  },
+  {
+    "issue": 2,
+    "type": "story",
+    "expectedFindings": [],
+    "expectedProposal": "none",
+    "note": "good-control-story"
+  },
+  {
+    "issue": 3,
+    "type": "story",
+    "expectedFindings": [
+      "story-format",
+      "context",
+      "epic-link",
+      "ac-presence",
+      "value",
+      "ac-testability",
+      "size-risk"
+    ],
+    "expectedProposal": "rewrite with format, context, epic-link and AC",
+    "note": "weak"
+  },
+  {
+    "issue": 4,
+    "type": "story",
+    "expectedFindings": [
+      "context",
+      "epic-link"
+    ],
+    "expectedProposal": "add context and epic-link",
+    "note": "weak-missing-context"
+  },
+  {
+    "issue": 5,
+    "type": "story",
+    "expectedFindings": [
+      "context",
+      "epic-link",
+      "ac-presence",
+      "size-risk"
+    ],
+    "expectedProposal": "split into smaller stories with context and epic-link",
+    "note": "oversized"
+  },
+  {
+    "issue": 6,
+    "type": "epic",
+    "expectedFindings": [
+      "epic-context",
+      "epic-goal",
+      "epic-benefit",
+      "epic-boundary",
+      "epic-success-measure",
+      "epic-slicing",
+      "epic-oversize-risk"
+    ],
+    "expectedProposal": "rewrite with clear goal, benefit, boundary and candidate stories",
+    "note": "weak-epic"
+  },
+  {
+    "issue": 7,
+    "type": "story",
+    "expectedFindings": [
+      "epic-link"
+    ],
+    "expectedProposal": "add epic-link",
+    "note": "weak-missing-epic-link"
+  },
+  {
+    "issue": 8,
+    "type": "story",
+    "expectedFindings": [
+      "epic-link"
+    ],
+    "expectedProposal": "add epic-link",
+    "note": "weak-missing-epic-link"
+  },
+  {
+    "issue": 9,
+    "type": "task",
+    "expectedFindings": [],
+    "expectedProposal": "skip",
+    "note": "out-of-scope"
+  },
+  {
+    "issue": 10,
+    "type": "bug",
+    "expectedFindings": [],
+    "expectedProposal": "skip",
+    "note": "out-of-scope"
+  },
+  {
+    "issue": 11,
+    "type": "story",
+    "expectedFindings": [
+      "ac-presence"
+    ],
+    "expectedProposal": "add more AC covering error cases",
+    "note": "weak-few-ac"
+  },
+  {
+    "issue": 12,
+    "type": "epic",
+    "expectedFindings": [
+      "epic-boundary",
+      "epic-slicing",
+      "epic-oversize-risk"
+    ],
+    "expectedProposal": "split by customer outcome or product domain",
+    "note": "oversized-epic"
+  }
+]

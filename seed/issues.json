@@ -1,0 +1,204 @@
+[
+  {
+    "number": 1,
+    "title": "Invoice self-service",
+    "labels": [
+      "type:epic",
+      "demo-seed"
+    ],
+    "body": "**Goal:** Enable residential customers to independently find, view, and download their recent invoices in the customer portal.\n\n**Benefit:** Customers can obtain invoice copies without contacting support; support demand for invoice copies is expected to decrease.\n\n**Success Measure:** Validate whether invoice-copy contacts decrease after release; the target and measurement baseline must be agreed with the product team before use.\n\n**In Scope:** Invoice overview, invoice details, and PDF download for invoices that are already available in the billing system.\n\n**Out of Scope:** Creating invoices, payment collection, dunning, changing billing addresses, and invoices not available from the billing system.\n\n**Candidate Stories:**\n- Download an existing invoice as PDF\n- View the invoice overview\n- See an empty-state message when no invoice is available",
+    "expected": {
+      "type": "epic",
+      "findings": [],
+      "note": "good-control"
+    }
+  },
+  {
+    "number": 2,
+    "title": "Download invoice as PDF",
+    "labels": [
+      "type:story",
+      "demo-seed"
+    ],
+    "body": "**Story:** As a residential customer, I want to download an existing invoice as a PDF so that I can store it for my accounting.\n\n**Context:** Self-Service Customer Portal, residential customers, part of Epic #1.\n\n**Acceptance Criteria**\n- [ ] Given I am signed in and have at least one invoice, when I select \"Download PDF\", then the download starts within 3 seconds.\n- [ ] Given I have no invoice, when I open the invoices page, then I see \"No invoices available\".\n- [ ] Given the PDF is generated, when I open it, then it contains the invoice number, date, total amount, and my customer number.\n- [ ] Given I am not signed in, when I access an invoice URL, then I am redirected to the sign-in page.",
+    "expected": {
+      "type": "story",
+      "findings": [],
+      "note": "good-control"
+    }
+  },
+  {
+    "number": 3,
+    "title": "Improve login",
+    "labels": [
+      "type:story",
+      "demo-seed"
+    ],
+    "body": "The login should be better.",
+    "expected": {
+      "type": "story",
+      "findings": [
+        "story-format",
+        "context",
+        "epic-link",
+        "ac-presence",
+        "value",
+        "ac-testability",
+        "size-risk"
+      ],
+      "note": "weak"
+    }
+  },
+  {
+    "number": 4,
+    "title": "Reset password",
+    "labels": [
+      "type:story",
+      "demo-seed"
+    ],
+    "body": "**Story:** As a customer, I want to reset my password so that I can regain access if I forget it.\n\n**Acceptance Criteria**\n- [ ] Given I am on the login page, when I click \"Forgot password\", then I receive an email with a reset link.\n- [ ] Given I click the reset link, when I enter a new password, then I can log in with the new password.\n- [ ] Given the link is older than 24 hours, when I click it, then I see an error message.",
+    "expected": {
+      "type": "story",
+      "findings": [
+        "context",
+        "epic-link"
+      ],
+      "note": "weak-missing-context"
+    }
+  },
+  {
+    "number": 5,
+    "title": "Manage account settings",
+    "labels": [
+      "type:story",
+      "demo-seed"
+    ],
+    "body": "**Story:** As a customer, I want to manage my profile, notification preferences, payment method, and security settings so that my account is up to date.\n\n**Acceptance Criteria**\n- [ ] Given I am signed in, when I open account settings, then I see all options.\n- [ ] Given I change a setting, when I save, then the change is applied.",
+    "expected": {
+      "type": "story",
+      "findings": [
+        "context",
+        "epic-link",
+        "ac-presence",
+        "size-risk"
+      ],
+      "note": "oversized"
+    }
+  },
+  {
+    "number": 6,
+    "title": "Modernize the portal",
+    "labels": [
+      "type:epic",
+      "demo-seed"
+    ],
+    "body": "The customer portal should be modern and better.",
+    "expected": {
+      "type": "epic",
+      "findings": [
+        "epic-context",
+        "epic-goal",
+        "epic-benefit",
+        "epic-boundary",
+        "epic-success-measure",
+        "epic-slicing",
+        "epic-oversize-risk"
+      ],
+      "note": "weak-epic"
+    }
+  },
+  {
+    "number": 7,
+    "title": "View invoice overview",
+    "labels": [
+      "type:story",
+      "demo-seed"
+    ],
+    "body": "**Story:** As a residential customer, I want to view a list of my available invoices so that I can see what I owe.\n\n**Context:** Self-Service Customer Portal, residential customers, part of Epic #1.\n\n**Acceptance Criteria**\n- [ ] Given I am signed in, when I open the invoices page, then I see a list of my invoices sorted by date descending.\n- [ ] Given I have no invoices, when I open the page, then I see \"No invoices available\".\n- [ ] Given I select an invoice, when I click it, then I see the invoice details.",
+    "expected": {
+      "type": "story",
+      "findings": [
+        "epic-link"
+      ],
+      "note": "weak-missing-epic-link"
+    }
+  },
+  {
+    "number": 8,
+    "title": "Change payment method",
+    "labels": [
+      "type:story",
+      "demo-seed"
+    ],
+    "body": "**Story:** As a customer, I want to change my payment method so that I can pay with a different card.\n\n**Context:** Self-Service Customer Portal.\n\n**Acceptance Criteria**\n- [ ] Given I am signed in, when I open payment settings, then I see my current payment method.\n- [ ] Given I add a new card, when I save, then the new card is used for future invoices.\n- [ ] Given the card is invalid, when I try to save, then I see an error message.",
+    "expected": {
+      "type": "story",
+      "findings": [
+        "epic-link"
+      ],
+      "note": "weak-missing-epic-link"
+    }
+  },
+  {
+    "number": 9,
+    "title": "Database migration to PostgreSQL 16",
+    "labels": [
+      "type:task",
+      "demo-seed"
+    ],
+    "body": "**Task:** Migrate the database from PostgreSQL 15 to PostgreSQL 16.\n\n**Result:** Database runs on PostgreSQL 16 with all data intact.\n\n**Done when:**\n- [ ] Backup is created\n- [ ] Migration is tested in staging\n- [ ] Production migration is completed",
+    "expected": {
+      "type": "task",
+      "findings": [],
+      "note": "out-of-scope"
+    }
+  },
+  {
+    "number": 10,
+    "title": "PDF download fails on mobile Safari",
+    "labels": [
+      "type:bug",
+      "demo-seed"
+    ],
+    "body": "**Bug:** PDF download fails on mobile Safari.\n\n**Steps to reproduce:**\n1. Open the invoices page on mobile Safari\n2. Click \"Download PDF\"\n\n**Expected:** Download starts\n**Actual:** Error message appears\n\n**Environment:** iOS 17, Safari",
+    "expected": {
+      "type": "bug",
+      "findings": [],
+      "note": "out-of-scope"
+    }
+  },
+  {
+    "number": 11,
+    "title": "Download invoice",
+    "labels": [
+      "type:story",
+      "demo-seed"
+    ],
+    "body": "**Story:** As a customer, I want to download an invoice so that I can store it.\n\n**Context:** Self-Service Customer Portal, residential customers, part of Epic #1.\n\n**Acceptance Criteria**\n- [ ] Given I am signed in and have an invoice, when I click \"Download\", then the PDF starts.",
+    "expected": {
+      "type": "story",
+      "findings": [
+        "ac-presence"
+      ],
+      "note": "weak-few-ac"
+    }
+  },
+  {
+    "number": 12,
+    "title": "Digital customer experience",
+    "labels": [
+      "type:epic",
+      "demo-seed"
+    ],
+    "body": "**Goal:** Build web and mobile experiences for onboarding, billing, payments, support, notifications, profile management, and all account changes for every customer segment.\n\n**Benefit:** Customers have a better experience.",
+    "expected": {
+      "type": "epic",
+      "findings": [
+        "epic-boundary",
+        "epic-slicing",
+        "epic-oversize-risk"
+      ],
+      "note": "oversized-epic"
+    }
+  }
+]
