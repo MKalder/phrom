@@ -1,4 +1,4 @@
-import { listIssues, getIssue } from "./tools.js";
+import { listIssues, getIssue } from "./tools_depricated.js";
 
 async function test() {
     console.log("Testing listIssues()...");

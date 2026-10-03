@@ -2,6 +2,16 @@
 docs-de
 de
 node_modules
+case-study
+dor_refinement
+output
+*deprecated
+*doc
+db
+references
 
 # Env
 .env
+
+# files
+workflow-issue-check.md

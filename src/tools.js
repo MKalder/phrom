@@ -1,65 +1,76 @@
 /**
- * tools.js – GitHub-Tools für den Phrom-Agenten.
+ * tools.js – GitHub-Tools mit @octokit/rest.
  *
- * Tools, die der Agent nutzt, um Issues zu lesen.
- * Kein Schreiben an dieser Stelle – nur Lesen.
+ * Konfiguration über .env:
+ *   GITHUB_TOKEN=your_token
+ *   GITHUB_OWNER=your_username_or_org
+ *   GITHUB_REPO=your_repo_name
  */
 
 import { Octokit } from "@octokit/rest";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
-  baseUrl: "https://api.github.com",
 });
 
-const DEMO_REPO = process.env.DEMO_REPO; // "owner/repo"
+const OWNER = process.env.GITHUB_OWNER;
+const REPO = process.env.GITHUB_REPO;
+
+if (!OWNER || !REPO) {
+  throw new Error("GITHUB_OWNER and GITHUB_REPO must be set in .env");
+}
 
 /**
- * listIssues() – Holt alle offenen Issues mit dem Label `demo-seed`.
- * @returns {Promise<Array>} Array von Issues (nummer, title, labels, body)
+ * listIssues() – Holt alle offenen Issues (ohne Pull Requests).
+ * Rückgabe: Array von { number, title, labels } (ohne Body).
  */
 export async function listIssues() {
-  const [owner, repo] = DEMO_REPO.split("/");
-
-  const response = await octokit.rest.issues.listForRepo({
-    owner,
-    repo,
+  const { data } = await octokit.issues.listForRepo({
+    owner: OWNER,
+    repo: REPO,
     state: "open",
-    labels: "demo-seed",
-    per_page: 100,
+    filter: "all",
   });
 
-  return response.data.map((issue) => ({
+  // Pull Requests herausfiltern (GitHub mischt Issues und PRs)
+  const issues = data.filter((item) => !item.pull_request);
+
+  return issues.map((issue) => ({
     number: issue.number,
     title: issue.title,
-    labels: issue.labels.map((l) => l.name),
-    body: issue.body || "",
-    html_url: issue.html_url,
+    labels: issue.labels || [],
   }));
 }
 
 /**
- * getIssue() – Holt ein einzelnes Issue nach Nummer.
- * @param {number} issueNumber – Die Issue-Nummer im Demo-Repo.
- * @returns {Promise<Object>} Issue-Objekt mit number, title, labels, body.
+ * getIssue(number) – Holt ein einzelnes Issue mit vollem Body.
  */
-export async function getIssue(issueNumber) {
-  const [owner, repo] = DEMO_REPO.split("/");
-
-  const response = await octokit.rest.issues.get({
-    owner,
-    repo,
-    issue_number: issueNumber,
+export async function getIssue(number) {
+  const { data } = await octokit.issues.get({
+    owner: OWNER,
+    repo: REPO,
+    issue_number: number,
   });
 
   return {
-    number: response.data.number,
-    title: response.data.title,
-    labels: response.data.labels.map((l) => l.name),
-    body: response.data.body || "",
-    html_url: response.data.html_url,
+    number: data.number,
+    title: data.title,
+    body: data.body || "",
+    labels: data.labels || [],
   };
+}
+
+/**
+ * postComment(issueNumber, body) – Schreibt einen Kommentar unter ein Issue.
+ * Wird in Phase 3 benötigt (mit Freigabe-Workflow).
+ */
+export async function postComment(issueNumber, body) {
+  const { data } = await octokit.issues.createComment({
+    owner: OWNER,
+    repo: REPO,
+    issue_number: issueNumber,
+    body,
+  });
+
+  return data;
 }
