@@ -1,65 +1,92 @@
 /**
- * tools.js – GitHub-Tools für den Phrom-Agenten.
+ * tools.js – GitHub tools using @octokit/rest.
  *
- * Tools, die der Agent nutzt, um Issues zu lesen.
- * Kein Schreiben an dieser Stelle – nur Lesen.
+ * Configuration through .env:
+ * GITHUB_TOKEN=your_token
+ * GITHUB_OWNER=your_username_or_org
+ * GITHUB_REPO=your_repo_name
  */
 
 import { Octokit } from "@octokit/rest";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN,
-  baseUrl: "https://api.github.com",
+    auth: process.env.GITHUB_TOKEN,
 });
 
-const DEMO_REPO = process.env.DEMO_REPO; // "owner/repo"
+const OWNER = process.env.GITHUB_OWNER;
+const REPO = process.env.GITHUB_REPO;
 
-/**
- * listIssues() – Holt alle offenen Issues mit dem Label `demo-seed`.
- * @returns {Promise<Array>} Array von Issues (nummer, title, labels, body)
- */
-export async function listIssues() {
-  const [owner, repo] = DEMO_REPO.split("/");
-
-  const response = await octokit.rest.issues.listForRepo({
-    owner,
-    repo,
-    state: "open",
-    labels: "demo-seed",
-    per_page: 100,
-  });
-
-  return response.data.map((issue) => ({
-    number: issue.number,
-    title: issue.title,
-    labels: issue.labels.map((l) => l.name),
-    body: issue.body || "",
-    html_url: issue.html_url,
-  }));
+if (!OWNER || !REPO) {
+    throw new Error("GITHUB_OWNER and GITHUB_REPO must be set in .env");
 }
 
 /**
- * getIssue() – Holt ein einzelnes Issue nach Nummer.
- * @param {number} issueNumber – Die Issue-Nummer im Demo-Repo.
- * @returns {Promise<Object>} Issue-Objekt mit number, title, labels, body.
+ * List open issues, optionally filtered by label.
+ *
+ * @param {string|null} label Optional GitHub label, e.g. "type:epic"
+ * @returns {Promise<Array>}
  */
-export async function getIssue(issueNumber) {
-  const [owner, repo] = DEMO_REPO.split("/");
+export async function listIssues(label = null) {
+    const params = {
+        owner: OWNER,
+        repo: REPO,
+        state: "open",
+        filter: "all",
+        per_page: 100,
+    };
 
-  const response = await octokit.rest.issues.get({
-    owner,
-    repo,
-    issue_number: issueNumber,
-  });
+    if (label) {
+        params.labels = label;
+    }
 
-  return {
-    number: response.data.number,
-    title: response.data.title,
-    labels: response.data.labels.map((l) => l.name),
-    body: response.data.body || "",
-    html_url: response.data.html_url,
-  };
+    const { data } = await octokit.issues.listForRepo(params);
+
+    return data
+        .filter((item) => !item.pull_request)
+        .map((issue) => ({
+            number: issue.number,
+            title: issue.title,
+            labels: issue.labels || [],
+        }));
+}
+
+/**
+ * Get one issue with full body.
+ *
+ * @param {number} number
+ * @returns {Promise<Object>}
+ */
+export async function getIssue(number) {
+    const { data } = await octokit.issues.get({
+        owner: OWNER,
+        repo: REPO,
+        issue_number: number,
+    });
+
+    return {
+        number: data.number,
+        title: data.title,
+        body: data.body || "",
+        labels: data.labels || [],
+        state: data.state,
+        htmlUrl: data.html_url,
+    };
+}
+
+/**
+ * Post a comment to an issue.
+ *
+ * @param {number} issueNumber
+ * @param {string} body
+ * @returns {Promise<Object>}
+ */
+export async function postComment(issueNumber, body) {
+    const { data } = await octokit.issues.createComment({
+        owner: OWNER,
+        repo: REPO,
+        issue_number: issueNumber,
+        body,
+    });
+
+    return data;
 }
