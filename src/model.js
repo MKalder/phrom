@@ -1,5 +1,5 @@
 /**
- * model.js – Ollama-Wrapper für Modell-Checks (Phase 2).
+ * model.js – Ollama-Wrapper für Modell-Checks (vollständig, alle Typen).
  *
  * Nutzt die offizielle ollama-Library für strukturierte Calls.
  * Konfiguration über .env:
@@ -11,12 +11,8 @@ import ollama from "ollama";
 
 const MODEL_NAME = process.env.MODEL_NAME || "qwen3:30b-instruct";
 
-
 /**
  * askModel(prompt, schema) – Führt einen Modell-Call mit Structured Output aus.
- * @param {string} prompt - Der vollständige Prompt.
- * @param {object} schema - JSON-Schema für die erwartete Antwort.
- * @returns {Promise<object>} Geparste JSON-Antwort.
  */
 async function askModel(prompt, schema) {
   const response = await ollama.chat({
@@ -87,7 +83,7 @@ const TYPE_INFERENCE_SCHEMA = {
 };
 
 // ---------------------------------------------------------------------------
-// Check-Funktionen (je eine pro Dimension)
+// Check-Funktionen (alle Typen: Story, Task, Bug, Epic)
 // ---------------------------------------------------------------------------
 
 /**
@@ -197,9 +193,121 @@ and a short reason (1-2 sentences, in the language of the issue).`;
   return askModelWithRetry(prompt, TYPE_INFERENCE_SCHEMA);
 }
 
+// =============================================================================
+// TASK-SPECIFIC AI CHECKS
+// =============================================================================
+
+/**
+ * checkTechnicalFeasibility(issue) – Bewertet technische Machbarkeit.
+ */
+export async function checkTechnicalFeasibility(issue) {
+  const prompt = `You are a senior engineer evaluating a technical task.
+Assess whether the technical approach is feasible and well-understood.
+
+Consider:
+- Is the technical scope clear and achievable?
+- Are dependencies and risks identified?
+- Is the team likely to have the required skills?
+
+${issueBlock(issue)}
+
+Respond as JSON: passed = true if the approach is feasible and well-understood,
+false if there are significant technical uncertainties. Give a short reason.`;
+
+  return askModelWithRetry(prompt, PASS_FAIL_SCHEMA);
+}
+
+/**
+ * checkRollbackRisk(issue) – Bewertet Rollback-Risiko.
+ */
+export async function checkRollbackRisk(issue) {
+  const prompt = `You are a senior engineer evaluating rollback risk for a technical task.
+Assess whether the rollback plan is adequate for the production impact.
+
+Consider:
+- Is rollback tested or just documented?
+- Is the estimated rollback time reasonable?
+- Does the task involve data migration (higher risk) or just configuration?
+
+${issueBlock(issue)}
+
+Respond as JSON: passed = true if rollback risk is acceptable,
+false if rollback is untested or inadequate for the impact. Give a short reason.`;
+
+  return askModelWithRetry(prompt, PASS_FAIL_SCHEMA);
+}
+
+// =============================================================================
+// BUG-SPECIFIC AI CHECKS
+// =============================================================================
+
+/**
+ * checkSeverity(issue) – Bewertet die Bug-Schwere (Critical/Major/Minor).
+ */
+export async function checkSeverity(issue) {
+  const prompt = `You are a senior QA engineer assessing bug severity.
+Evaluate the severity of this bug based on:
+- Impact on users (how many affected?)
+- Impact on business (revenue, compliance, reputation)
+- Workaround availability (is there a temporary fix?)
+
+Severity scale:
+- Critical: System down, data loss, security breach, compliance violation
+- Major: Core feature broken, significant user impact, no workaround
+- Minor: Edge case, cosmetic issue, workaround available
+
+${issueBlock(issue)}
+
+Respond as JSON: { severity: "Critical"|"Major"|"Minor", passed: true if severity is clearly justified, false otherwise, reason: "1-2 sentences" }.`;
+
+  const schema = {
+    type: "object",
+    properties: {
+      severity: { type: "string", enum: ["Critical", "Major", "Minor"] },
+      passed: { type: "boolean" },
+      reason: { type: "string" },
+    },
+    required: ["severity", "passed", "reason"],
+  };
+
+  return askModelWithRetry(prompt, schema);
+}
+
+/**
+ * checkReproducibility(issue) – Bewertet, wie reproduzierbar der Bug ist.
+ */
+export async function checkReproducibility(issue) {
+  const prompt = `You are a senior QA engineer assessing bug reproducibility.
+Evaluate how reproducible this bug is based on the provided steps:
+- Are the steps clear and detailed?
+- Is the environment specified?
+- Is the frequency mentioned (always/sometimes/rarely)?
+
+Reproducibility scale:
+- Always: Bug occurs 100% of the time with given steps
+- Sometimes: Bug occurs intermittently (50-90%)
+- Rarely: Bug is hard to reproduce (<50%)
+- Unknown: Insufficient information
+
+${issueBlock(issue)}
+
+Respond as JSON: { reproducibility: "Always"|"Sometimes"|"Rarely"|"Unknown", passed: true if reproducibility is clearly stated, false otherwise, reason: "1-2 sentences" }.`;
+
+  const schema = {
+    type: "object",
+    properties: {
+      reproducibility: { type: "string", enum: ["Always", "Sometimes", "Rarely", "Unknown"] },
+      passed: { type: "boolean" },
+      reason: { type: "string" },
+    },
+    required: ["reproducibility", "passed", "reason"],
+  };
+
+  return askModelWithRetry(prompt, schema);
+}
+
 /**
  * runModelChecks(issue, type) – Führt alle passenden Modell-Checks für ein Issue aus.
- * Gibt ein Objekt mit den Ergebnissen zurück.
  */
 export async function runModelChecks(issue, type) {
   const results = {};
@@ -212,6 +320,12 @@ export async function runModelChecks(issue, type) {
   } else if (type === "epic") {
     results.epicGoal = await checkEpicGoal(issue);
     results.epicBenefit = await checkEpicBenefit(issue);
+  } else if (type === "task") {
+    results.technicalFeasibility = await checkTechnicalFeasibility(issue);
+    results.rollbackRisk = await checkRollbackRisk(issue);
+  } else if (type === "bug") {
+    results.severity = await checkSeverity(issue);
+    results.reproducibility = await checkReproducibility(issue);
   }
 
   return results;
