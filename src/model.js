@@ -1,10 +1,12 @@
 /**
  * model.js – Ollama-Wrapper für Modell-Checks (vollständig, alle Typen).
- *
+ * 
  * Nutzt die offizielle ollama-Library für strukturierte Calls.
  * Konfiguration über .env:
- *   OLLAMA_HOST=http://localhost:11434
- *   MODEL_NAME=qwen3:30b-instruct
+ * OLLAMA_HOST=http://localhost:11434
+ * MODEL_NAME=qwen3:30b-instruct
+ * 
+ * NOTE: Check-Namen entsprechen jetzt den Criteria-IDs (Kebab-Case).
  */
 
 import ollama from "ollama";
@@ -124,9 +126,10 @@ Respond as JSON: size (S/M/L/XL) and a short reason (1-2 sentences, in the langu
 }
 
 /**
- * checkValue(issue) – Bewertet den Business-Wert einer Story.
+ * checkBusinessValue(issue) – Bewertet den Business-Wert einer Story.
+ * NOTE: Renamed from checkValue to checkBusinessValue for clarity.
  */
-export async function checkValue(issue) {
+export async function checkBusinessValue(issue) {
   const prompt = `You are a product owner reviewing a user story.
 Evaluate whether this story clearly communicates business value:
 a specific user or role, a concrete need, and an understandable benefit.
@@ -306,23 +309,31 @@ Respond as JSON: { reproducibility: "Always"|"Sometimes"|"Rarely"|"Unknown", pas
   return askModelWithRetry(prompt, schema);
 }
 
+// =============================================================================
+// MAIN: runModelChecks(issue, type)
+// =============================================================================
+
 /**
  * runModelChecks(issue, type) – Führt alle passenden Modell-Checks für ein Issue aus.
+ * 
+ * NOTE: Keys entsprechen jetzt den Criteria-IDs (Kebab-Case).
  */
 export async function runModelChecks(issue, type) {
   const results = {};
 
-  results.acTestability = await checkAcTestability(issue);
-  results.sizeRisk = await checkSizeRisk(issue);
+  // Common checks for all types
+  results["ac-testability"] = await checkAcTestability(issue);
+  results["size-risk"] = await checkSizeRisk(issue);
 
+  // Type-specific checks
   if (type === "story") {
-    results.value = await checkValue(issue);
+    results["business-value"] = await checkBusinessValue(issue);
   } else if (type === "epic") {
-    results.epicGoal = await checkEpicGoal(issue);
-    results.epicBenefit = await checkEpicBenefit(issue);
+    results["epic-goal"] = await checkEpicGoal(issue);
+    results["epic-benefit"] = await checkEpicBenefit(issue);
   } else if (type === "task") {
-    results.technicalFeasibility = await checkTechnicalFeasibility(issue);
-    results.rollbackRisk = await checkRollbackRisk(issue);
+    results["technical-feasibility"] = await checkTechnicalFeasibility(issue);
+    results["rollback-risk"] = await checkRollbackRisk(issue);
   } else if (type === "bug") {
     results.severity = await checkSeverity(issue);
     results.reproducibility = await checkReproducibility(issue);

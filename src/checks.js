@@ -3,6 +3,9 @@
  *
  * Diese Funktionen prüfen Issues ohne Modell, rein regelbasiert.
  * Rückgabe: { passed: boolean, evidence?: string, reason?: string }
+ *
+ * NOTE: Funktionsnamen bleiben unverändert (CamelCase).
+ * Die Keys werden in agent.js durch runDeterministicChecks() bestimmt.
  */
 
 /**
@@ -27,8 +30,8 @@ export function checkStoryFormat(body) {
   ];
 
   const alternativePatterns = [
-    /in\s+order\s+to\s+.*,\s*as\s+a\s+\w+.*\s+i\s+want\s+.*/i,
-    /um\s+.*\s+zu\s+.*,\s*als\s+\w+.*\s+möchte\s+ich\s+.*/i,
+    /in\s+order\s+to\s+.*,\\s*as\s+a\s+\w+.*\s+i\s+want\s+.*/i,
+    /um\s+.*\s+zu\s+.*,\\s*als\s+\w+.*\s+möchte\s+ich\s+.*/i,
   ];
 
   const allPatterns = [...germanPatterns, ...englishPatterns, ...alternativePatterns];
@@ -46,7 +49,10 @@ export function checkStoryFormat(body) {
     return { passed: true, evidence: "Story elements found (role, want, why), but not in standard format" };
   }
 
-  return { passed: false, reason: "No story format found. Expected: \'As a [role], I want [goal] so that [benefit]\' or \'Als [Rolle], möchte ich [Ziel] damit [Nutzen]\'" };
+  return {
+    passed: false,
+    reason: "No story format found. Expected: 'As a [role], I want [goal] so that [benefit]' or 'Als [Rolle], möchte ich [Ziel] damit [Nutzen]'",
+  };
 }
 
 /**
@@ -112,7 +118,7 @@ export function checkEpicLink(body) {
   const matches = body.match(issueRegex) || [];
 
   if (matches.length === 0) {
-    return { passed: false, reason: "No epic link (e.g., \'#1\' or \'owner/repo#1\') found" };
+    return { passed: false, reason: "No epic link (e.g., '#1' or 'owner/repo#1') found" };
   }
 
   const epicContextKeywords = [
@@ -130,7 +136,10 @@ export function checkEpicLink(body) {
     return { passed: true, evidence: `Epic link(s) found: ${matches.join(", ")} (with epic context)` };
   }
 
-  return { passed: false, reason: `Multiple issue references found (${matches.join(", ")}), but no epic context. Please specify which is the parent epic.` };
+  return {
+    passed: false,
+    reason: `Multiple issue references found (${matches.join(", ")}), but no epic context. Please specify which is the parent epic.`,
+  };
 }
 
 /**
@@ -172,7 +181,10 @@ export function checkACPresence(body) {
   const hasErrorCase = /(error|fail|invalid|exception|edge case|boundary)/i.test(body);
 
   if (!hasHappyPath || !hasErrorCase) {
-    return { passed: true, evidence: `${totalAC} acceptance criteria found, but consider adding ${!hasHappyPath ? "a happy path" : ""}${!hasHappyPath && !hasErrorCase ? " and " : ""}${!hasErrorCase ? "an error case" : ""}` };
+    return {
+      passed: true,
+      evidence: `${totalAC} acceptance criteria found, but consider adding ${!hasHappyPath ? "a happy path" : ""}${!hasHappyPath && !hasErrorCase ? " and " : ""}${!hasErrorCase ? "an error case" : ""}`,
+    };
   }
 
   return { passed: true, evidence: `${totalAC} acceptance criteria found (happy path + error case covered)` };
@@ -232,7 +244,7 @@ export function checkTechnicalScope(body) {
   const hasScopeSection = scopePatterns.some(pattern => pattern.test(body));
 
   if (!hasScopeSection) {
-    return { passed: false, reason: "No clear technical scope section found. Add a \'What\' or \'Scope\' section with specific work items." };
+    return { passed: false, reason: "No clear technical scope section found. Add a 'What' or 'Scope' section with specific work items." };
   }
 
   const actionVerbs = [
@@ -270,7 +282,7 @@ export function checkJustification(body) {
   const hasJustification = justificationPatterns.some(pattern => pattern.test(body));
 
   if (!hasJustification) {
-    return { passed: false, reason: "No justification section found. Add a \'Why\' section explaining the driver (e.g., EOL date, security requirement, performance need)." };
+    return { passed: false, reason: "No justification section found. Add a 'Why' section explaining the driver (e.g., EOL date, security requirement, performance need)." };
   }
 
   const hasEOL = /\b(eol|end-of-life|Q\d|202\d)\b/i.test(body);
@@ -307,7 +319,7 @@ export function checkImpactAnalysis(body) {
   const hasImpact = impactPatterns.some(pattern => pattern.test(body));
 
   if (!hasImpact) {
-    return { passed: false, reason: "No impact analysis section found. Add an \'Impact\' section listing affected systems, planned downtime, and risks." };
+    return { passed: false, reason: "No impact analysis section found. Add an 'Impact' section listing affected systems, planned downtime, and risks." };
   }
 
   const hasAffectedSystems = /\b(affected\s*systems|databases|services)\b/i.test(body);
@@ -379,7 +391,7 @@ export function checkReproductionSteps(body) {
   const hasReproduction = reproductionPatterns.some(pattern => pattern.test(body));
 
   if (!hasReproduction) {
-    return { passed: false, reason: "No reproduction steps found. Add numbered steps to reproduce the bug (e.g., \'1. Go to..., 2. Click..., 3. Observe error\')." };
+    return { passed: false, reason: "No reproduction steps found. Add numbered steps to reproduce the bug (e.g., '1. Go to..., 2. Click..., 3. Observe error')." };
   }
 
   const numberedSteps = body.match(/^\d+\.\s+/gm) || [];
@@ -411,7 +423,7 @@ export function checkExpectedVsActual(body) {
   const hasExpectedVsActual = expectedPatterns.some(pattern => pattern.test(body));
 
   if (!hasExpectedVsActual) {
-    return { passed: false, reason: "No \'Expected vs. Actual\' section found. Add clear description of expected behavior and actual behavior (e.g., \'Expected: PDF downloads. Actual: Error 500\')." };
+    return { passed: false, reason: "No 'Expected vs. Actual' section found. Add clear description of expected behavior and actual behavior (e.g., 'Expected: PDF downloads. Actual: Error 500')." };
   }
 
   const hasExpected = /\bexpected\b/i.test(body);
@@ -477,7 +489,7 @@ export function checkGoalStatement(body) {
   const hasGoal = goalPatterns.some(pattern => pattern.test(body));
 
   if (!hasGoal) {
-    return { passed: false, reason: "No goal statement found. Add a \'Goal\' section with a SMART objective (Specific, Measurable, Achievable, Relevant, Time-bound)." };
+    return { passed: false, reason: "No goal statement found. Add a 'Goal' section with a SMART objective (Specific, Measurable, Achievable, Relevant, Time-bound)." };
   }
 
   const hasSpecific = /\b(specific|clear|defined)\b/i.test(body);
@@ -513,14 +525,14 @@ export function checkBenefitStatement(body) {
   const hasBenefit = benefitPatterns.some(pattern => pattern.test(body));
 
   if (!hasBenefit) {
-    return { passed: false, reason: "No benefit statement found. Add a \'Benefit\' section quantifying who gains what (e.g., \'Customers save 10 minutes/month\')." };
+    return { passed: false, reason: "No benefit statement found. Add a 'Benefit' section quantifying who gains what (e.g., 'Customers save 10 minutes/month')." };
   }
 
   const hasQuantified = /\b(\d+\s*(%|minutes?|hours?|tickets?|dollars?|€)|reduce|increase|save)\b/i.test(body);
   const hasStakeholder = /\b(customer|user|support|team|business|revenue)\b/i.test(body);
 
   if (!hasQuantified) {
-    return { passed: false, reason: "Benefit statement exists but lacks quantification. Add specific numbers (e.g., \'reduce support tickets by 30%\')." };
+    return { passed: false, reason: "Benefit statement exists but lacks quantification. Add specific numbers (e.g., 'reduce support tickets by 30%')." };
   }
 
   const details = [];
@@ -546,14 +558,17 @@ export function checkStoryList(body) {
   const hasStoryList = storyListPatterns.some(pattern => pattern.test(body));
 
   if (!hasStoryList) {
-    return { passed: false, reason: "No story list found. Add a \'Stories\' section listing child stories (e.g., \'#2, #7, #11\')." };
+    return { passed: false, reason: "No story list found. Add a 'Stories' section listing child stories (e.g., '#2, #7, #11')." };
   }
 
   const issueRefs = body.match(/#\d+/g) || [];
 
   if (issueRefs.length === 0) {
-    return { passed: false, reason: "Story list section exists but no issue references found. Add links to child stories (e.g., \'#2 Download invoice\')." };
+    return { passed: false, reason: "Story list section exists but no issue references found. Add links to child stories (e.g., '#2 Download invoice')." };
   }
 
-  return { passed: true, evidence: `${issueRefs.length} child story/stories referenced: ${issueRefs.slice(0, 5).join(", ")}${issueRefs.length > 5 ? "..." : ""}` };
+  return {
+    passed: true,
+    evidence: `${issueRefs.length} child story/stories referenced: ${issueRefs.slice(0, 5).join(", ")}${issueRefs.length > 5 ? "..." : ""}`,
+  };
 }
