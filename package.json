@@ -12,7 +12,14 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "phrom": "node src/cli.js"
+    "phrom": "node src/cli.js",
+    "demo": "node scripts/demo.js",
+    "seed": "node scripts/seed.js",
+    "seed:labels": "node seed/labels.js",
+    "seed:issues": "node seed/seed.js",
+    "list": "node src/cli.js list",
+    "run": "node src/cli.js run",
+    "status": "node src/cli.js status"
   },
   "repository": {
     "type": "git",
