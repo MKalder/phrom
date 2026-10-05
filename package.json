@@ -1,6 +1,10 @@
 {
   "name": "phrom",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
   "bin": {
     "phrom": "./src/cli.js"
   },
