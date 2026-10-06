@@ -18,7 +18,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "phrom": "node src/cli.js",
     "demo": "node scripts/demo.js",
-    "seed": "node scripts/seed.js",
+    "seed": "npm run seed:labels && npm run seed:issues",
     "seed:labels": "node seed/labels.js",
     "seed:issues": "node seed/seed.js",
     "list": "node src/cli.js list",
