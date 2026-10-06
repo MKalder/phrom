@@ -1,6 +1,6 @@
 # ADR-001: GitHub Issues als Datenquelle für das Backlog
 
-- **Status:** Vorgeschlagen
+- **Status:** Akzeptiert
 - **Datum:** 2026-10-01
 - **Entscheider:** Marius Kalder (Product Owner / Autor von Phrom)
 - **Betrifft:** Wahl der Datenquelle für das Demo-Backlog und die Agenten-Integration
