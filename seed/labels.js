@@ -14,10 +14,32 @@
  * Bereits existierende Labels werden aktualisiert (Farbe, Beschreibung).
  */
 
-import { execFileSync } from "node:child_process";
 
-// Konfiguration – hier dein Demo-Repo einsetzen
-const REPO = "MKalder/phrom-backlog-demo";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import 'dotenv/config';  // Lädt .env
+
+
+// __dirname in ES Modules nachbauen
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+
+const GITHUB_OWNER = process.env.GITHUB_OWNER;
+const GITHUB_REPO = process.env.GITHUB_REPO;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
+
+// Validierung
+if (!GITHUB_OWNER || !GITHUB_REPO || !GITHUB_TOKEN) {
+  console.error('❌ Fehler: Bitte .env konfigurieren (GITHUB_OWNER, GITHUB_REPO, GITHUB_TOKEN)');
+  process.exit(1);
+}
+
+
+const REPO = `${GITHUB_OWNER}/${GITHUB_REPO}`;
+
 
 const labels = [
   { name: "type:epic", color: "6f42c1", description: "Large item, needs slicing into stories" },
@@ -27,7 +49,9 @@ const labels = [
   { name: "demo-seed", color: "cccccc", description: "Seed item for the Phrom demo" },
 ];
 
+
 console.log(`Creating/updating labels in ${REPO}...\n`);
+
 
 for (const label of labels) {
   try {
@@ -48,10 +72,12 @@ for (const label of labels) {
       { encoding: "utf8" }
     ).trim();
 
+
     console.log(`✓ ${label.name} – ${output || "updated"}`);
   } catch (err) {
     console.error(`✗ ${label.name} – Failed:`, err.message);
   }
 }
+
 
 console.log("\nLabels completed.");
