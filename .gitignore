@@ -9,6 +9,7 @@ output
 *doc
 db
 references
+archive
 
 # Env
 .env
