@@ -5,6 +5,7 @@ import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { printBanner } from './banner.js';
+import { OLLAMA_HOST, MODEL_NAME, describeAiEndpoint } from '../src/ollama-client.js';
 
 const execAsync = promisify(exec);
 
@@ -15,7 +16,7 @@ const startedAtWall = Date.now() - 2000;
 const verbose = process.argv.includes('--verbose');
 const showFull = process.argv.includes('--full');
 const showcaseArg = process.argv.find((arg) => arg.startsWith('--showcase='));
-const showcaseNumber = Number(showcaseArg?.split('=')[1]) || 3;
+const forcedShowcase = Number(showcaseArg?.split('=')[1]) || null;
 
 // ============================================================================
 // UI HELPERS
@@ -42,12 +43,27 @@ const STATUS = {
 const RULE = dim('─'.repeat(44));
 const TEXT_WIDTH = 76;
 
-const section = (title) => console.log(`\n${bold(title)}\n`);
+const section = (title, hint = '') =>
+    console.log(`\n${bold(title)}${hint ? dim(`  ${hint}`) : ''}\n`);
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 const firstLine = (text = '') => String(text).split('\n')[0];
 
 const fmtDuration = (ms) =>
     ms < 1000 ? '<1 s' : `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
+
+/** Maps technical errors to a short, human-readable reason. */
+function explainError(error) {
+    const text = String(error?.stderr ?? '') + String(error?.stdout ?? '') + String(error?.message ?? '');
+    if (/\b410\b/.test(text)) return 'issue no longer exists (410 Gone)';
+    if (/\b404\b/.test(text)) return 'issue not found (404)';
+    if (/\b(401|403)\b/.test(text)) return 'GitHub access denied (401/403)';
+    if (/ECONNREFUSED|fetch failed/i.test(text)) return 'service not reachable';
+    const line = text
+        .split('\n')
+        .map((l) => l.trim())
+        .find((l) => l && !l.startsWith('Command failed') && !l.startsWith('>'));
+    return truncate(line ?? 'unknown error', 70);
+}
 
 /** Animated spinner for async work. Silent when stdout is not a TTY. */
 async function withSpinner(label, fn) {
@@ -155,8 +171,26 @@ function latestFileForIssue(dir, issueNumber, { include, since = 0 } = {}) {
 }
 
 // ============================================================================
-// PARSING (Phrom markdown output)
+// PARSING (CLI output and Phrom markdown output)
 // ============================================================================
+
+/** "#3: Improve login [type:story, bug]" → { number, title, labels } */
+function parseIssueList(output) {
+    return [...output.matchAll(/^#(\d+):\s+(.*)\s+\[([^\]]*)\]\s*$/gm)].map((m) => ({
+        number: Number(m[1]),
+        title: m[2].trim(),
+        labels: m[3].split(',').map((l) => l.trim().toLowerCase()),
+    }));
+}
+
+/** "🔴 #3: Improve login – 10/50 (det: 1/5)" → Map(number → { score out of 50, passed, total }) */
+function parseFormalScores(output) {
+    const scores = new Map();
+    for (const m of output.matchAll(/^(?:🟢|🟡|🔴)\s+#(\d+):.*\s[–-]\s(\d+)\/50\s+\(det:\s*(\d+)\/(\d+)\)/gm)) {
+        scores.set(Number(m[1]), { score: Number(m[2]), passed: Number(m[3]), total: Number(m[4]) });
+    }
+    return scores;
+}
 
 function extractScore(text) {
     const match = text.match(/(\d{1,3})\s*\/\s*100/);
@@ -165,10 +199,12 @@ function extractScore(text) {
     return value <= 100 ? value : null;
 }
 
-/** "**Current Status:** Not-ready" → "Not-ready" */
+/** "**Current Status:** Not-ready" or "Score: 27/100 – not-ready" → "Not-ready" */
 function extractStatus(text) {
-    const match = text.match(/status:?\**\s*(not[-\s]?ready|needs[-\s]?work|ready)/i);
-    return match ? match[1] : null;
+    const labelled = text.match(/status:?\**\s*(not[-\s]?ready|needs[-\s]?work|ready)\b/i);
+    if (labelled) return labelled[1];
+    const inline = text.match(/\/\s*100\s*[–-]\s*(not[-\s]?ready|needs[-\s]?work|ready)\b/i);
+    return inline ? inline[1] : null;
 }
 
 function normalizeStatus(raw) {
@@ -222,7 +258,7 @@ function parseFindings(markdown) {
             continue;
         }
         if (/^##\s/.test(line)) {
-            current = null; // a new level-2 section ends the detail list
+            current = null;
             continue;
         }
         const problem = current && line.match(/^\*\*Problem:\*\*\s*(.+)$/);
@@ -242,7 +278,6 @@ function extractRevisedDraft(markdown) {
 
     const body = lines.slice(start + 1, end);
 
-    // Skip the intro sentence and the "---" separator: the draft starts at its first "## " heading.
     const firstHeading = body.findIndex((l) => /^##\s/.test(l));
     if (firstHeading === -1) return null;
 
@@ -278,8 +313,9 @@ function hidePlaceholderSections(text) {
 
 const githubOwner = process.env.GITHUB_OWNER;
 const githubRepo = process.env.GITHUB_REPO;
-const ollamaHost = process.env.OLLAMA_HOST || 'http://localhost:11434';
-const modelName = process.env.MODEL_NAME || 'qwen3:30b-instruct';
+// Same host and model as the AI checks themselves (src/ollama-client.js).
+const ollamaHost = OLLAMA_HOST;
+const modelName = MODEL_NAME;
 
 const isDemoRepo = githubOwner === 'MKalder' && githubRepo === 'phrom-backlog-demo';
 const repoLabel = isDemoRepo
@@ -288,14 +324,12 @@ const repoLabel = isDemoRepo
         ? `${githubOwner}/${githubRepo}`
         : 'not configured';
 
-const ollamaHostname = (() => {
-    try {
-        return new URL(ollamaHost).hostname;
-    } catch {
-        return '';
-    }
-})();
-const isLocalAI = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(ollamaHostname);
+const aiEndpoint = describeAiEndpoint(ollamaHost, modelName);
+const ollamaHostname = aiEndpoint.hostname;
+const isLocalAI = aiEndpoint.isLocal;
+const remoteNote = aiEndpoint.cloudModel
+    ? `cloud model ${modelName} (runs on ollama.com)`
+    : `Ollama @ ${ollamaHostname || ollamaHost} (remote host)`;
 
 let octokit = null;
 let resolvedModel = modelName;
@@ -325,7 +359,7 @@ console.log('  Mode        read-only');
 console.log(
     isLocalAI
         ? `  AI          local (Ollama) ${dim('· no backlog data sent to a cloud LLM')}\n`
-        : `  AI          Ollama @ ${ollamaHostname || ollamaHost} ${dim('(remote host)')}\n`
+        : `  AI          ${remoteNote} ${dim('· issue content leaves this machine')}\n`
 );
 
 // ============================================================================
@@ -346,7 +380,9 @@ if (githubOwner && githubRepo) {
 if (githubOwner && githubRepo) {
     try {
         const { Octokit } = await import('@octokit/rest');
-        octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+        // Octokit logs failed requests to the console by itself; keep the demo output clean.
+        const silent = { debug() { }, info() { }, warn() { }, error() { } };
+        octokit = new Octokit({ auth: process.env.GITHUB_TOKEN, log: silent });
         await octokit.repos.get({ owner: githubOwner, repo: githubRepo });
         addCheck('GitHub', 'ok', repoLabel);
     } catch (error) {
@@ -406,7 +442,7 @@ console.log(`\n${RULE}`);
 // 1. BACKLOG OVERVIEW
 // ============================================================================
 
-const deterministicStart = performance.now();
+const formalStart = performance.now();
 
 section('1. BACKLOG OVERVIEW');
 
@@ -418,53 +454,58 @@ try {
     process.exit(1);
 }
 
+const listedIssues = parseIssueList(listOutput);
 const countMatch = listOutput.match(/Found (\d+) open issues/);
-const issueCount = countMatch
-    ? Number(countMatch[1])
-    : listOutput.split('\n').filter((line) => line.startsWith('#')).length;
+const issueCount = countMatch ? Number(countMatch[1]) : listedIssues.length;
 
 console.log(`  ${bold(issueCount)} open issues`);
 
 // ============================================================================
-// 2. REFINEMENT READINESS
+// 2. FORMAL PRE-CHECK
 // ============================================================================
 
-section('2. REFINEMENT READINESS');
+section('2. FORMAL PRE-CHECK (rule-based, no AI)');
 
 let statusOutput = '';
 try {
     statusOutput = await run('npm run phrom status --silent');
 } catch {
-    console.error(`  ${SYMBOL.fail} Failed to calculate readiness\n`);
+    console.error(`  ${SYMBOL.fail} Failed to run the formal pre-check\n`);
     process.exit(1);
 }
 
-const pickNumber = (regex) => {
-    const match = statusOutput.match(regex);
+// Counts from the summary block of `phrom status` ("🟢 at least 80 % … : 8").
+const summaryBlock = statusOutput.split('=== Formal pre-check ===')[1] ?? '';
+const pickCount = (emoji) => {
+    const match = summaryBlock.match(new RegExp(`${emoji}[^:\\n]*:\\s*(\\d+)`));
     return match ? Number(match[1]) : null;
 };
 
-const ready = pickNumber(/🟢 Ready: (\d+)/);
-const needsWork = pickNumber(/🟡 Needs work: (\d+)/);
-const notReady = pickNumber(/🔴 Not ready: (\d+)/);
+const high = pickCount('🟢');
+const partial = pickCount('🟡');
+const low = pickCount('🔴');
 
-const deterministicMs = performance.now() - deterministicStart;
+const formalMs = performance.now() - formalStart;
+const formalScores = parseFormalScores(statusOutput);
 
 const show = (value) => (value === null ? '?' : value);
 
-console.log(`  ${DOT.ready} Ready        ${show(ready)}`);
-console.log(`  ${DOT.needsWork} Needs work   ${show(needsWork)}`);
-console.log(`  ${DOT.notReady} Not ready    ${show(notReady)}`);
+console.log(`  ${DOT.ready} ≥ 80 % of checks passed   ${show(high)}`);
+console.log(`  ${DOT.needsWork} 50–79 %                   ${show(partial)}`);
+console.log(`  ${DOT.notReady} < 50 %                    ${show(low)}`);
 
-const countsKnown = [ready, needsWork, notReady].every((value) => value !== null);
-const needAttention = countsKnown ? needsWork + notReady : null;
-const assessedCount = countsKnown ? ready + needsWork + notReady : issueCount;
+const countsKnown = [high, partial, low].every((value) => value !== null);
+const assessedCount = countsKnown ? high + partial + low : issueCount;
 
-if (countsKnown) {
-    console.log(`\n  ${bold('Recommendation')}`);
-    console.log(`  → ${ready} issues can enter refinement`);
-    console.log(`  → ${needAttention} require attention first`);
-    console.log(dim(`\n  ${needAttention} issues flagged before they reach refinement.`));
+// Issues with at least one failed formal check (taken from the per-issue lines "det: p/t").
+const formalKnown = formalScores.size > 0;
+const complete = [...formalScores.values()].filter((f) => f.total > 0 && f.passed === f.total).length;
+const withGaps = formalKnown ? formalScores.size - complete : null;
+
+if (formalKnown) {
+    console.log(dim(`\n  ${complete} issues pass all formal checks, ${withGaps} have at least one formal gap.`));
+    console.log(dim('  Formal pre-check only – not a readiness verdict. The AI analysis below assesses'));
+    console.log(dim('  semantic aspects: testability, value and size risk.'));
 }
 
 // ============================================================================
@@ -473,35 +514,56 @@ if (countsKnown) {
 
 const aiStart = performance.now();
 
-section('3. AI ANALYSIS');
+section(`3. AI ANALYSIS (showcase: 2 of ${issueCount} issues)`);
 
-// Which issues are showcased is a deliberate demo choice (change with --showcase=<n>).
-// Titles come from GitHub; the fixed titles are only a fallback if GitHub is unreachable.
-const FALLBACK_TITLES = { 3: 'Improve login', 4: 'Reset password', 5: 'Manage account settings' };
-const demoIssues = [...new Set([showcaseNumber, 4])].map((number) => ({
-    number,
-    fallbackTitle: FALLBACK_TITLES[number] ?? `Issue #${number}`,
-}));
+/**
+ * Picks issues from the CURRENT backlog (never hard-coded numbers, issues can be deleted):
+ *  - showcase: the story with the most formal gaps → strongest before/after example
+ *  - contrast: the story that looks best formally → shows what AI checks add
+ * Override the showcase with --showcase=<n>.
+ */
+function pickDemoIssues() {
+    const stories = listedIssues.filter((issue) => issue.labels.includes('type:story'));
+    const pool = stories.length > 0 ? stories : listedIssues;
+    const formal = (issue) => formalScores.get(issue.number)?.score ?? 50;
+
+    const ascending = [...pool].sort((a, b) => formal(a) - formal(b) || a.number - b.number);
+
+    let showcase = ascending[0];
+    if (forcedShowcase) {
+        showcase = listedIssues.find((issue) => issue.number === forcedShowcase);
+        if (!showcase) return { error: `Issue #${forcedShowcase} is not among the ${listedIssues.length} open issues.` };
+    }
+
+    const contrast = [...ascending].reverse().find((issue) => issue.number !== showcase?.number);
+    return { picks: [showcase, contrast].filter(Boolean) };
+}
+
+const { picks: demoIssues = [], error: pickError } = pickDemoIssues();
+
+if (pickError || demoIssues.length === 0) {
+    console.error(`  ${SYMBOL.fail} ${pickError ?? 'No suitable issues found in the backlog.'}\n`);
+    process.exit(1);
+}
 
 const analysisResults = [];
+const analysisFailures = [];
 
 for (const demo of demoIssues) {
-    const original = await fetchIssue(demo.number);
-    const title = original?.title ?? demo.fallbackTitle;
-
     let selectOutput = '';
-    let failed = false;
+    let failure = null;
 
-    await withSpinner(`Analyzing #${demo.number} ${title}…`, async () => {
+    await withSpinner(`Analyzing #${demo.number} ${demo.title}…`, async () => {
         try {
             selectOutput = await run(`npm run phrom select ${demo.number} --silent`);
-        } catch {
-            failed = true;
+        } catch (error) {
+            failure = explainError(error);
         }
     });
 
-    if (failed) {
-        console.log(`  ${SYMBOL.fail} #${demo.number}  Failed to analyze`);
+    if (failure) {
+        console.log(`  ${SYMBOL.fail} #${demo.number}  ${truncate(demo.title, 22)} ${dim(`– ${failure}`)}`);
+        analysisFailures.push({ number: demo.number, reason: failure });
         continue;
     }
 
@@ -509,8 +571,8 @@ for (const demo of demoIssues) {
     const { dot, text } = status ?? { dot: DOT.unknown, text: '' };
     const scoreCell = score === null ? '    n/a' : `${String(score).padStart(3)}/100`;
 
-    console.log(`  #${demo.number}  ${truncate(title, 22).padEnd(22)} ${dot} ${scoreCell}  ${text}`);
-    analysisResults.push({ number: demo.number, title, original, score, status });
+    console.log(`  #${demo.number}  ${truncate(demo.title, 22).padEnd(22)} ${dot} ${scoreCell}  ${text}`);
+    analysisResults.push({ number: demo.number, title: demo.title, score, status });
 }
 
 // ============================================================================
@@ -537,10 +599,10 @@ async function ensureDraft(number) {
 }
 
 let improvementsGenerated = 0;
-const showcase = analysisResults.find((issue) => issue.number === showcaseNumber);
+const showcase = analysisResults.find((issue) => issue.number === demoIssues[0].number);
 
 if (!showcase) {
-    console.log(dim(`  Skipped – analysis of #${showcaseNumber} failed.`));
+    console.log(dim(`  Skipped – analysis of #${demoIssues[0].number} failed.`));
 } else {
     let draftPath = null;
     let draftError = null;
@@ -548,7 +610,7 @@ if (!showcase) {
     try {
         draftPath = await ensureDraft(showcase.number);
     } catch (error) {
-        draftError = firstLine(error.message);
+        draftError = explainError(error);
     }
 
     const markdown = readIfExists(draftPath);
@@ -576,13 +638,13 @@ if (!showcase) {
         }
 
         const aiCount = findings.filter((f) => f.kind === 'ai').length;
-        console.log(dim(`\n  ${findings.length - aiCount} rule-based · ${aiCount} AI-detected\n`));
-    } else if (!draftError) {
+        console.log(dim(`\n  ${findings.length - aiCount} rule-based gaps · ${aiCount} AI-assessed gaps\n`));
+    } else if (draftPath) {
         console.log(`  ${SYMBOL.warn} No gap list found in ${relPath(draftPath)}\n`);
     }
 
     // --- BEFORE: original issue from GitHub ---
-    const original = showcase.original;
+    const original = await fetchIssue(showcase.number);
     const beforeBody = original?.body ? original.body.split('\n').slice(0, 8).join('\n') : '';
 
     printBlock('BEFORE', [
@@ -620,23 +682,36 @@ const aiMs = performance.now() - aiStart;
 
 console.log(`\n${RULE}\n`);
 
-console.log(`${SYMBOL.ok} ${bold('Refinement assessment complete')}\n`);
+const demoSucceeded = analysisResults.length > 0 && improvementsGenerated > 0;
 
-const row = (left, right) => console.log(`  ${left.padEnd(30)}${dim(right)}`);
+if (demoSucceeded) {
+    console.log(`${SYMBOL.ok} ${bold('Demo complete')}\n`);
+} else {
+    console.log(`${SYMBOL.warn} ${bold('Demo incomplete')}`);
+    for (const failure of analysisFailures) {
+        console.log(dim(`  #${failure.number}: ${failure.reason}`));
+    }
+    console.log();
+    process.exitCode = 1;
+}
 
-row(`${assessedCount} issues assessed`, `deterministic · ${fmtDuration(deterministicMs)}`);
+const row = (left, right) => console.log(`  ${left.padEnd(32)}${dim(right)}`);
+
+row(`${assessedCount} issues pre-checked`, `rule-based · ${fmtDuration(formalMs)}`);
 row(`${analysisResults.length} issues analyzed with AI`, `${resolvedModel} · ${fmtDuration(aiMs)}`);
 row(`${improvementsGenerated} improvement generated`, 'before → after');
 
-if (countsKnown) {
-    console.log(`\n  ${ready} ready for refinement · ${needAttention} require attention`);
+if (formalKnown) {
+    console.log(`\n  ${complete} pass all formal checks · ${withGaps} have at least one formal gap`);
 }
 
-console.log(
-    isLocalAI
-        ? `\n  ${SYMBOL.ok} AI ran locally – no issue data was sent to a cloud LLM.`
-        : `\n  ${SYMBOL.warn} AI ran on a remote Ollama host (${ollamaHostname}).`
-);
+if (analysisResults.length > 0) {
+    console.log(
+        isLocalAI
+            ? `\n  ${SYMBOL.ok} AI ran locally – no issue data was sent to a cloud LLM.`
+            : `\n  ${SYMBOL.warn} AI did not run locally: ${remoteNote}.`
+    );
+}
 
 console.log(dim('\n  Reports: output/reports/ · output/improvement-suggestions/'));
 
@@ -646,15 +721,15 @@ console.log(dim('\n  Reports: output/reports/ · output/improvement-suggestions/
 
 console.log(`\n${bold('Next')}\n`);
 
-if (countsKnown && improvementsGenerated) {
-    const remaining = Math.max(needAttention - 1, 0);
+if (demoSucceeded && formalKnown) {
+    const remaining = Math.max(withGaps - 1, 0);
     if (remaining > 0) {
-        console.log(`  → ${remaining} more issues need a rewrite: npm run phrom improve <issue-number>`);
+        console.log(`  → ${remaining} more issues have formal gaps: npm run phrom improve <issue-number>`);
     }
 }
 
 if (isDemoRepo) {
-    console.log('  → Run Phrom on your own backlog (see README Option B)\n');
+    console.log('  → Run Phrom on your own backlog (see README, Option B)\n');
 } else {
     console.log('  → Seed demo data in your repository: npm run seed');
     console.log(dim('    requires: gh auth login\n'));
