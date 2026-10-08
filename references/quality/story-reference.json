@@ -1,0 +1,123 @@
+{
+  "version": "0.2.0",
+  "artifactType": "reference-story",
+  "purpose": "Canonical example for story quality. Use as a guide, not as a rigid template. Covers all 10 quality criteria.",
+  "story": {
+    "title": "Download invoice as PDF",
+    "context": {
+      "operator": "Internet provider with 500,000 residential customers",
+      "product": "Self-Service Customer Portal",
+      "platforms": [
+        "Web portal",
+        "Mobile app (iOS/Android)",
+        "PWA"
+      ],
+      "targetGroup": "Residential customers who want to manage their invoices independently",
+      "partOfEpic": "#1 Invoice self-service"
+    },
+    "body": "**Story:** As a residential customer, I want to download an existing invoice as a PDF so that I can store it for my accounting.\n\n**Acceptance Criteria**\n\n**Happy Path:**\n- [ ] Given I am signed in and have at least one invoice, when I select \"Download PDF\", then the download starts within 3 seconds.\n- [ ] Given the PDF is generated, when I open it, then it contains the invoice number, date, total amount, and my customer number.\n\n**Error Cases:**\n- [ ] Given I have no invoice, when I open the invoices page, then I see \"No invoices available\".\n- [ ] Given I am not signed in, when I access an invoice URL, then I am redirected to the sign-in page.\n\n**Dependencies:**\n- This story depends on #4 (Reset password) for authorization flow.\n- This story blocks #11 (Download invoice - legacy) which will be deprecated.",
+    "acceptanceCriteriaStructured": {
+      "happyPath": [
+        {
+          "id": "HP1",
+          "gherkin": "Given I am signed in and have at least one invoice, when I select 'Download PDF', then the download starts within 3 seconds.",
+          "type": "Happy Path",
+          "description": "Standard flow - user downloads invoice successfully"
+        },
+        {
+          "id": "HP2",
+          "gherkin": "Given the PDF is generated, when I open it, then it contains the invoice number, date, total amount, and my customer number.",
+          "type": "Happy Path",
+          "description": "Document content verification - PDF contains required fields"
+        }
+      ],
+      "errorCases": [
+        {
+          "id": "EC1",
+          "gherkin": "Given I have no invoice, when I open the invoices page, then I see 'No invoices available'.",
+          "type": "Error Case / Empty State",
+          "description": "Empty state - no invoices available for download"
+        },
+        {
+          "id": "EC2",
+          "gherkin": "Given I am not signed in, when I access an invoice URL, then I am redirected to the sign-in page.",
+          "type": "Error Case / Authorization",
+          "description": "Authorization check - redirect unauthenticated users"
+        }
+      ]
+    },
+    "dependencies": {
+      "dependsOn": [
+        {
+          "issue": "#4",
+          "title": "Reset password",
+          "reason": "Authorization flow required for secure invoice access"
+        }
+      ],
+      "blocks": [
+        {
+          "issue": "#11",
+          "title": "Download invoice (legacy)",
+          "reason": "New implementation replaces legacy version"
+        }
+      ],
+      "relatedTo": [
+        {
+          "issue": "#7",
+          "title": "View invoice overview",
+          "reason": "Invoice list view is prerequisite for download action"
+        }
+      ]
+    }
+  },
+  "qualityCriteria": {
+    "storyFormat": {
+      "status": "✅ Pass",
+      "evidence": "As a [residential customer], I want [to download an existing invoice as a PDF], so that [I can store it for my accounting]."
+    },
+    "context": {
+      "status": "✅ Pass",
+      "evidence": "Names operator (internet provider), product (self-service portal), target group (residential customers), platforms (web, mobile, PWA), and parent epic (#1)."
+    },
+    "epicLink": {
+      "status": "✅ Pass",
+      "evidence": "partOfEpic: '#1 Invoice self-service'"
+    },
+    "acPresence": {
+      "status": "✅ Pass",
+      "evidence": "4 acceptance criteria: 2 happy path + 2 error cases (exceeds minimum of 2)."
+    },
+    "acTestability": {
+      "status": "✅ Pass",
+      "evidence": "All criteria are SMART: Specific (download within 3 seconds), Measurable (contains invoice number, date, total amount), Achievable, Relevant, Testable."
+    },
+    "sizeRisk": {
+      "status": "✅ Pass",
+      "evidence": "Well-scoped feature with clear boundaries. Dependencies documented. Estimated: M (medium)."
+    },
+    "businessValue": {
+      "status": "✅ Pass",
+      "evidence": "Clear benefit: 'so that I can store it for my accounting' - ties to real user need (tax documentation)."
+    },
+    "storyLinks": {
+      "status": "✅ Pass",
+      "evidence": "Dependencies documented: depends on #4, blocks #11, related to #7."
+    }
+  },
+  "whyThisIsReferenceQuality": [
+    "Names operator, product, target group, supported platforms, and parent epic (complete context).",
+    "Has one user role, one primary user goal, and an explicit benefit (clear story format).",
+    "Covers 2 happy paths (download flow + document content) and 2 error cases (empty state + authorization).",
+    "Uses Gherkin syntax (Given/When/Then) for testable, unambiguous acceptance criteria.",
+    "Documents dependencies explicitly (depends on, blocks, related to) for backlog grooming.",
+    "Avoids vague terms like 'easy', 'fast', 'user-friendly' - uses observable outcomes instead.",
+    "Structured JSON format enables automated quality checks and AI-powered evaluation."
+  ],
+  "howToUseThisReference": [
+    "Use as a template for structuring your own stories (context → story → AC → dependencies).",
+    "Compare your AC against this reference: Do you have happy path + error case coverage?",
+    "Check if your story has a clear 'so that' benefit like this reference.",
+    "Document dependencies like this reference (depends on / blocks / related to).",
+    "Use the quality criteria checklist to self-assess before refinement."
+  ]
+}

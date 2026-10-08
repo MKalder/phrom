@@ -1,0 +1,148 @@
+{
+  "version": "0.3.0",
+  "artifactType": "task-check-criteria",
+  "scope": "Pre-refinement quality assessment for technical tasks. This is not a Definition of Done.",
+  "scoring": {
+    "totalPoints": 100,
+    "formula": "score = round(earnedPoints / totalPoints * 100)",
+    "note": "Criteria with implemented=false carry no points and do not affect score or ready gate."
+  },
+  "assessmentRules": {
+    "requireEvidence": true,
+    "resultValues": [
+      "pass",
+      "flag",
+      "not-assessable"
+    ],
+    "readyGate": "A task cannot be 'Ready' if any required criterion is 'flag' or 'not-assessable'."
+  },
+  "criteria": [
+    {
+      "id": "technical-scope",
+      "check": "code",
+      "required": true,
+      "points": 15,
+      "description": "Describes the technical work in concrete steps or bullet points.",
+      "passCondition": "At least two concrete work items or steps are described."
+    },
+    {
+      "id": "justification",
+      "check": "code",
+      "required": true,
+      "points": 10,
+      "description": "Explains why this task is needed (e.g., EOL, security, performance, tech debt).",
+      "passCondition": "A clear trigger or rationale is stated; the model must not invent justification."
+    },
+    {
+      "id": "impact-analysis",
+      "check": "code",
+      "required": true,
+      "points": 10,
+      "description": "Identifies affected systems, expected downtime, and involved teams.",
+      "passCondition": "Affected systems or services are named; downtime is stated or explicitly flagged as unknown."
+    },
+    {
+      "id": "rollback-plan",
+      "check": "code",
+      "required": true,
+      "points": 10,
+      "description": "Provides a rollback or remediation plan.",
+      "passCondition": "A rollback approach is described or the lack of a rollback is explicitly justified with mitigations."
+    },
+    {
+      "id": "ac-presence",
+      "check": "code",
+      "required": false,
+      "points": 5,
+      "description": "Contains acceptance criteria or verification steps.",
+      "passCondition": "At least one testable outcome or verification step is present."
+    },
+    {
+      "id": "ac-testability",
+      "check": "model",
+      "required": true,
+      "points": 20,
+      "description": "Acceptance criteria or verification steps are observable and testable.",
+      "passCondition": "Each criterion has a verifiable outcome; vague terms are defined or flagged."
+    },
+    {
+      "id": "size-risk",
+      "check": "model",
+      "required": true,
+      "points": 15,
+      "description": "Flags signs that the task is likely too broad for a single sprint.",
+      "passCondition": "No broadness indicators are present, or any conclusion explicitly remains a risk signal.",
+      "indicators": [
+        "Multiple unrelated systems or components",
+        "Multiple independent technical initiatives combined with 'and'",
+        "Words such as 'all', 'complete', 'entire' without narrow boundary",
+        "No clear verification or rollback path"
+      ]
+    },
+    {
+      "id": "technical-feasibility",
+      "check": "model",
+      "required": true,
+      "points": 10,
+      "description": "The technical approach is feasible and well-understood.",
+      "passCondition": "The model judges the approach feasible with identified dependencies and risks; significant technical uncertainty fails."
+    },
+    {
+      "id": "rollback-risk",
+      "check": "model",
+      "required": false,
+      "points": 5,
+      "description": "The rollback plan is adequate for the production impact.",
+      "passCondition": "Rollback is tested or adequately described for the impact; an untested or inadequate rollback fails."
+    },
+    {
+      "id": "task-context",
+      "implemented": false,
+      "check": "code",
+      "required": true,
+      "description": "Names the affected system, component, or service and the technical domain.",
+      "passCondition": "System/component and technical domain are explicitly stated."
+    },
+    {
+      "id": "task-dependencies",
+      "implemented": false,
+      "check": "model",
+      "required": false,
+      "description": "Documents dependencies on other teams, services, or external factors.",
+      "passCondition": "Dependencies are named or explicitly flagged as unknown."
+    }
+  ],
+  "examples": [
+    {
+      "classification": "good-control",
+      "title": "Database migration to PostgreSQL 16",
+      "summary": "Clear technical scope, justification (EOL), impact analysis, rollback plan, and testable verification steps.",
+      "expectedFlags": []
+    },
+    {
+      "classification": "weak",
+      "title": "Update the database",
+      "body": "We should update the database soon.",
+      "expectedFlags": [
+        "task-context",
+        "justification",
+        "technical-scope",
+        "impact-analysis",
+        "rollback-plan",
+        "ac-presence",
+        "size-risk"
+      ]
+    },
+    {
+      "classification": "oversized",
+      "title": "Modernize infrastructure",
+      "body": "Migrate all services to Kubernetes, update all databases, and implement service mesh.",
+      "expectedFlags": [
+        "technical-scope",
+        "size-risk",
+        "impact-analysis"
+      ],
+      "expectedObservation": "Multiple independent initiatives; recommend splitting by service or domain."
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "version": "0.1.0",
+  "artifactType": "reference-epic",
+  "purpose": "Canonical example for epic quality. Use as a guide for evaluating epics (strategic initiatives spanning multiple sprints).",
+  "epic": {
+    "title": "Invoice self-service",
+    "type": "epic",
+    "goal": "Enable residential customers to independently access, view, and download their invoices by Q2/2026, reducing support demand for invoice copies by 30%.",
+    "benefit": {
+      "customers": "Save 10 minutes per month by self-serving invoices (no more support calls for invoice requests)",
+      "supportTeam": "Reduce workload by 50 tickets/month (from 150 to 100 invoice-related tickets)",
+      "business": "No additional headcount needed for invoice requests; improved customer satisfaction (NPS +5 points)"
+    },
+    "childStories": [
+      {
+        "issue": "#2",
+        "title": "Download invoice as PDF",
+        "status": "Done"
+      },
+      {
+        "issue": "#7",
+        "title": "View invoice overview",
+        "status": "Done"
+      },
+      {
+        "issue": "#11",
+        "title": "Download invoice (legacy migration)",
+        "status": "In Progress"
+      },
+      {
+        "issue": "#13",
+        "title": "Provide an overview of annual expenses",
+        "status": "Backlog"
+      }
+    ],
+    "successMetrics": {
+      "primary": {
+        "metric": "Reduction in invoice-related support tickets",
+        "baseline": "150 tickets/month (Q4/2025)",
+        "target": "100 tickets/month (30% reduction)",
+        "deadline": "Q2/2026"
+      },
+      "secondary": [
+        {
+          "metric": "Self-service adoption rate",
+          "baseline": "40% (customers using portal vs. calling support)",
+          "target": "80%",
+          "deadline": "Q2/2026"
+        },
+        {
+          "metric": "Customer satisfaction (NPS)",
+          "baseline": "+25",
+          "target": "+30 (5 point increase)",
+          "deadline": "Q3/2026"
+        },
+        {
+          "metric": "PDF download error rate",
+          "baseline": "5%",
+          "target": "< 2%",
+          "deadline": "Q2/2026"
+        }
+      ]
+    },
+    "stakeholders": {
+      "owner": "Sarah Chen (Product Manager)",
+      "techLead": "John Martinez (Engineering Lead)",
+      "stakeholders": [
+        "Mike Thompson (Support Team Lead)",
+        "Anna Schmidt (Legal / Compliance)",
+        "David Park (UX Design)"
+      ]
+    },
+    "timeline": {
+      "start": "2026-01-15",
+      "target": "2026-06-30",
+      "duration": "6 months (3 quarters)",
+      "milestones": [
+        {
+          "name": "MVP: Download + View",
+          "date": "2026-03-31",
+          "stories": [
+            "#2",
+            "#7"
+          ]
+        },
+        {
+          "name": "Legacy Migration",
+          "date": "2026-05-31",
+          "stories": [
+            "#11"
+          ]
+        },
+        {
+          "name": "Full Launch + Metrics Tracking",
+          "date": "2026-06-30",
+          "stories": [
+            "#13",
+            "All metrics operational"
+          ]
+        }
+      ]
+    },
+    "risks": [
+      {
+        "risk": "Low adoption rate",
+        "mitigation": "Proactive communication campaign, in-app tutorials, support team training"
+      },
+      {
+        "risk": "Technical debt in legacy invoice system",
+        "mitigation": "Early spike on legacy code, buffer time in timeline for refactoring"
+      },
+      {
+        "risk": "Legal compliance (invoice retention requirements)",
+        "mitigation": "Early involvement of legal team (Anna), compliance check at MVP milestone"
+      }
+    ],
+    "dependencies": [
+      "Billing system API stability (Team: Backend)",
+      "PDF generation service (Team: Platform)",
+      "Customer portal authentication (Team: Frontend)"
+    ]
+  },
+  "qualityCriteria": {
+    "goalStatement": {
+      "status": "✅ Pass",
+      "evidence": "SMART goal: Specific (enable customers to access invoices), Measurable (30% reduction in support tickets), Time-bound (by Q2/2026)."
+    },
+    "benefitStatement": {
+      "status": "✅ Pass",
+      "evidence": "Quantified benefits for 3 stakeholder groups: customers (10 min/month), support team (50 tickets/month), business (NPS +5, no headcount increase)."
+    },
+    "storyList": {
+      "status": "✅ Pass",
+      "evidence": "4 child stories linked (#2, #7, #11, #13) with status tracking (2 Done, 1 In Progress, 1 Backlog)."
+    },
+    "successMetrics": {
+      "status": "✅ Pass",
+      "evidence": "1 primary metric + 3 secondary metrics, all with baseline, target, and deadline."
+    },
+    "stakeholders": {
+      "status": "✅ Pass",
+      "evidence": "Owner (PM), Tech Lead, and 3 key stakeholders named with roles."
+    },
+    "timeline": {
+      "status": "✅ Pass",
+      "evidence": "Clear start/end dates, 3 milestones with story mapping."
+    },
+    "acTestability": {
+      "status": "✅ Pass",
+      "evidence": "Epic success is testable: 30% ticket reduction, 80% adoption, <2% error rate – all measurable."
+    },
+    "sizeRisk": {
+      "status": "✅ Pass",
+      "evidence": "Well-scoped for 6 months. Risks identified with mitigations. Estimated: L (large) but manageable."
+    }
+  },
+  "whyThisIsReferenceQuality": [
+    "Goal is SMART: Specific outcome, measurable target (30%), time-bound deadline (Q2/2026).",
+    "Benefits are quantified for multiple stakeholders (customers, support, business) with concrete numbers.",
+    "Child stories are explicitly linked with status tracking (Done/In Progress/Backlog).",
+    "Success metrics include baseline, target, and deadline – enables objective success measurement.",
+    "Stakeholders are named with roles – clear accountability (Owner, Tech Lead, Support, Legal, UX).",
+    "Timeline has milestones with story mapping – enables progress tracking.",
+    "Risks are identified with mitigations – proactive risk management.",
+    "Dependencies on other teams are documented – enables cross-team coordination."
+  ],
+  "howToUseThisReference": [
+    "Use as a template for structuring epics: Goal → Benefit → Stories → Metrics → Stakeholders → Timeline.",
+    "Compare your epic against this reference: Is your goal SMART (with numbers and deadline)?",
+    "Check if your benefits are as quantified as this reference (%, time, tickets, cost).",
+    "Ensure you have at least 2-3 child stories linked (this reference has 4).",
+    "Define success metrics with baseline and target – not just 'improve X'.",
+    "Name stakeholders explicitly – who owns this, who is impacted?",
+    "Use the quality criteria checklist to self-assess before refinement."
+  ],
+  "differencesFromStory": [
+    "No 'As a user...' format – epics use outcome-oriented goal statement.",
+    "Focus on strategic outcome (30% reduction) vs. user feature (download PDF).",
+    "Spans multiple sprints (6 months) vs. single sprint (1-2 weeks).",
+    "Requires success metrics with baseline/target vs. acceptance criteria.",
+    "Requires stakeholder mapping vs. single user role.",
+    "Requires milestone timeline vs. sprint deadline."
+  ]
+}

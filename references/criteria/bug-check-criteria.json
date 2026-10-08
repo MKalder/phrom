@@ -1,0 +1,131 @@
+{
+  "version": "0.3.0",
+  "artifactType": "bug-check-criteria",
+  "scope": "Pre-refinement quality assessment for bug reports. This is not a Definition of Done.",
+  "scoring": {
+    "totalPoints": 105,
+    "formula": "score = round(earnedPoints / totalPoints * 100)",
+    "note": "Criteria with implemented=false carry no points and do not affect score or ready gate."
+  },
+  "assessmentRules": {
+    "requireEvidence": false,
+    "resultValues": [
+      "pass",
+      "flag",
+      "not-assessable"
+    ],
+    "readyGate": "A bug cannot be 'Ready' if any required criterion is 'flag' or 'not-assessable'."
+  },
+  "criteria": [
+    {
+      "id": "reproduction-steps",
+      "check": "code",
+      "required": true,
+      "points": 15,
+      "description": "Provides numbered reproduction steps.",
+      "passCondition": "At least two numbered steps are present and describe a reproducible scenario."
+    },
+    {
+      "id": "expected-vs-actual",
+      "check": "code",
+      "required": true,
+      "points": 15,
+      "description": "Clearly separates expected behavior from actual behavior.",
+      "passCondition": "Both expected and actual behavior are explicitly stated."
+    },
+    {
+      "id": "environment-info",
+      "check": "code",
+      "required": true,
+      "points": 10,
+      "description": "Includes environment information (device, OS, browser, app version).",
+      "passCondition": "At least device/OS or browser/version is provided."
+    },
+    {
+      "id": "ac-presence",
+      "check": "code",
+      "required": false,
+      "points": 10,
+      "description": "Contains acceptance criteria or verification steps for the fix.",
+      "passCondition": "At least one testable outcome for verifying the fix is present."
+    },
+    {
+      "id": "ac-testability",
+      "check": "model",
+      "required": true,
+      "points": 20,
+      "description": "Acceptance criteria or verification steps are observable and testable.",
+      "passCondition": "Each criterion has a verifiable outcome; vague terms are defined or flagged."
+    },
+    {
+      "id": "size-risk",
+      "check": "model",
+      "required": true,
+      "points": 15,
+      "description": "Flags signs that the bug fix is likely too broad or complex for a single sprint.",
+      "passCondition": "No broadness indicators are present, or any conclusion explicitly remains a risk signal.",
+      "indicators": [
+        "Root cause spans multiple systems or services",
+        "Fix requires architectural changes",
+        "Multiple independent bugs combined in one issue",
+        "No clear reproduction path"
+      ]
+    },
+    {
+      "id": "severity",
+      "check": "model",
+      "required": true,
+      "points": 10,
+      "description": "States or infers severity (Critical, Major, Minor) with justification.",
+      "passCondition": "Severity is stated or inferred from impact; the model must not invent severity without evidence."
+    },
+    {
+      "id": "reproducibility",
+      "check": "model",
+      "required": false,
+      "points": 10,
+      "description": "States how often the bug occurs (always, sometimes, rarely) and under what conditions.",
+      "passCondition": "Reproducibility is stated or explicitly flagged as unknown."
+    },
+    {
+      "id": "bug-impact",
+      "implemented": false,
+      "check": "model",
+      "required": false,
+      "description": "Describes the impact on users, revenue, or compliance.",
+      "passCondition": "Impact is described or explicitly flagged as unknown."
+    }
+  ],
+  "examples": [
+    {
+      "classification": "good-control",
+      "title": "PDF download fails on mobile Safari",
+      "summary": "Clear reproduction steps, expected vs. actual behavior, environment info, and testable verification criteria.",
+      "expectedFlags": []
+    },
+    {
+      "classification": "weak",
+      "title": "Download is broken",
+      "body": "The download doesn't work.",
+      "expectedFlags": [
+        "reproduction-steps",
+        "expected-vs-actual",
+        "environment-info",
+        "severity",
+        "reproducibility",
+        "ac-presence"
+      ]
+    },
+    {
+      "classification": "complex",
+      "title": "Intermittent login failures across all platforms",
+      "body": "Users sometimes cannot log in on web, iOS, and Android.",
+      "expectedFlags": [
+        "reproducibility",
+        "size-risk",
+        "bug-impact"
+      ],
+      "expectedObservation": "Root cause may span authentication service, session management, and multiple clients; recommend investigation spike before fix."
+    }
+  ]
+}

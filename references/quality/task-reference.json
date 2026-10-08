@@ -1,0 +1,171 @@
+{
+  "version": "0.1.0",
+  "artifactType": "reference-task",
+  "purpose": "Canonical example for technical task quality. Use as a guide for evaluating technical tasks (infrastructure, technical debt, operations, research).",
+  "task": {
+    "title": "Database migration to PostgreSQL 16",
+    "type": "technical-task",
+    "why": "PostgreSQL 15 reaches end-of-life in Q4/2027. Security patches will no longer be provided. We need to upgrade to maintain security compliance and access performance improvements in PostgreSQL 16 (15% faster query execution, improved JSON operations).",
+    "what": [
+      "Upgrade PostgreSQL from version 15 to 16 on all environments (staging → production)",
+      "Apply schema migration scripts (see migrations/v16-schema-changes.sql)",
+      "Verify application compatibility (run full integration test suite)",
+      "Update monitoring dashboards for new version metrics",
+      "Update runbooks and documentation with PostgreSQL 16-specific procedures"
+    ],
+    "impact": {
+      "affectedSystems": [
+        "Customer database (primary)",
+        "Billing database (replica)",
+        "Analytics database (separate cluster)"
+      ],
+      "downtime": {
+        "planned": "2 hours",
+        "window": "Saturday 2-4 AM CET",
+        "communication": "Email to all customers 7 days in advance, status page update"
+      },
+      "risks": [
+        "Schema incompatibilities may cause application errors",
+        "Migration may exceed planned downtime window",
+        "Rollback may be required if critical issues found"
+      ],
+      "rollback": {
+        "procedure": "Restore from backup taken immediately before migration",
+        "tested": true,
+        "estimatedTime": "45 minutes",
+        "documentedIn": "runbooks/postgresql-rollback-v16.md"
+      }
+    },
+    "acceptanceCriteria": {
+      "technical": [
+        {
+          "id": "TC1",
+          "gherkin": "Given the migration script runs on staging, when executed, then it completes without errors (exit code 0).",
+          "type": "Technical Success",
+          "measurement": "Log file shows 'Migration completed successfully', no ERROR entries"
+        },
+        {
+          "id": "TC2",
+          "gherkin": "Given the migration is complete, when the integration test suite runs, then 100% of tests pass within 5 minutes.",
+          "type": "Compatibility Verification",
+          "measurement": "CI pipeline shows 100% pass rate, total duration < 5 minutes"
+        },
+        {
+          "id": "TC3",
+          "gherkin": "Given the production migration starts at 2 AM, when it completes, then total downtime is ≤ 2 hours.",
+          "type": "Downtime Constraint",
+          "measurement": "Downtime monitoring shows ≤ 120 minutes from start to service restoration"
+        },
+        {
+          "id": "TC4",
+          "gherkin": "Given the rollback procedure is documented, when tested on staging, then it completes within 45 minutes.",
+          "type": "Rollback Verification",
+          "measurement": "Rollback test log shows completion in ≤ 45 minutes"
+        }
+      ],
+      "documentation": [
+        {
+          "id": "DC1",
+          "description": "Runbook updated with PostgreSQL 16-specific procedures",
+          "location": "runbooks/postgresql-v16-operations.md"
+        },
+        {
+          "id": "DC2",
+          "description": "Monitoring dashboard updated with new PostgreSQL 16 metrics",
+          "location": "Grafana dashboard 'PostgreSQL Cluster v16'"
+        }
+      ]
+    },
+    "dependencies": {
+      "blocks": [
+        {
+          "issue": "#15",
+          "title": "Enable read replicas for analytics",
+          "reason": "Read replicas require PostgreSQL 16 features"
+        }
+      ],
+      "relatedTo": [
+        {
+          "issue": "#9",
+          "title": "Database migration to PostgreSQL 16 (this task)",
+          "reason": "Same task, different tracking"
+        }
+      ],
+      "requires": [
+        "Backup infrastructure operational",
+        "Maintenance window approved by management",
+        "On-call engineer scheduled for migration weekend"
+      ]
+    },
+    "successMetrics": {
+      "technical": [
+        "Zero data loss during migration",
+        "100% test pass rate post-migration",
+        "Downtime ≤ 2 hours"
+      ],
+      "business": [
+        "Security compliance maintained (no EOL database)",
+        "Performance improvement: 15% faster average query time",
+        "Zero customer-reported incidents related to migration"
+      ]
+    }
+  },
+  "qualityCriteria": {
+    "technicalScope": {
+      "status": "✅ Pass",
+      "evidence": "Clear 'what' section with 5 specific work items, each actionable and testable."
+    },
+    "justification": {
+      "status": "✅ Pass",
+      "evidence": "Clear 'why' section with EOL date, security impact, and performance benefits quantified."
+    },
+    "impactAnalysis": {
+      "status": "✅ Pass",
+      "evidence": "Lists all affected systems, planned downtime with communication plan, and specific risks."
+    },
+    "rollbackPlan": {
+      "status": "✅ Pass",
+      "evidence": "Documented procedure, tested on staging, estimated time (45 min), location of runbook."
+    },
+    "acPresence": {
+      "status": "✅ Pass",
+      "evidence": "6 acceptance criteria: 4 technical (TC1-TC4) + 2 documentation (DC1-DC2). Covers success, compatibility, downtime, rollback."
+    },
+    "acTestability": {
+      "status": "✅ Pass",
+      "evidence": "All AC are SMART: Specific (exit code 0), Measurable (100% pass rate, ≤ 2 hours), Achievable, Relevant, Testable."
+    },
+    "dependencies": {
+      "status": "✅ Pass",
+      "evidence": "Documents blocks (#15), relatedTo, and requires (backup, approval, on-call)."
+    },
+    "sizeRisk": {
+      "status": "✅ Pass",
+      "evidence": "Well-scoped with clear boundaries. Risks identified. Estimated: L (large) due to production impact."
+    }
+  },
+  "whyThisIsReferenceQuality": [
+    "Clear separation of 'why' (justification), 'what' (scope), and 'impact' (risks, downtime).",
+    "Quantifies everything: downtime (2h), test pass rate (100%), rollback time (45min), performance gain (15%).",
+    "Rollback plan is not just documented but tested – critical for production changes.",
+    "Acceptance criteria cover technical success, compatibility, operational constraints, and documentation.",
+    "Dependencies explicitly documented (blocks, requires) for coordination with other teams.",
+    "Success metrics include both technical (zero data loss) and business (security compliance, performance) outcomes.",
+    "Uses Gherkin syntax for technical AC – makes them testable by automation."
+  ],
+  "howToUseThisReference": [
+    "Use as a template for structuring technical tasks: why → what → impact → AC → dependencies.",
+    "Compare your task against this reference: Do you have a clear 'why' with quantified impact?",
+    "Check if your acceptance criteria are as specific and measurable as this reference.",
+    "Ensure you have a tested rollback plan for any production-impacting change.",
+    "Document dependencies (blocks/requires) to coordinate with other teams.",
+    "Use the quality criteria checklist to self-assess before refinement."
+  ],
+  "differencesFromStory": [
+    "No 'As a [user]...' format – tasks use imperative style ('Upgrade PostgreSQL...').",
+    "No business value in 'so that...' form – value is indirect (security, performance, stability).",
+    "Focus on technical outcomes (exit code 0, 100% tests pass) vs. user outcomes (download within 3 seconds).",
+    "Requires rollback plan – stories typically don't need this.",
+    "Impact section critical – stories focus on user benefit, tasks on system impact."
+  ]
+}

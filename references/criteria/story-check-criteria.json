@@ -1,0 +1,145 @@
+{
+  "version": "0.3.0",
+  "artifactType": "story-check-criteria",
+  "scope": "Pre-refinement quality assessment for user stories. This is not a Definition of Done and does not decide sprint readiness.",
+  "scoring": {
+    "totalPoints": 100,
+    "formula": "score = round(earnedPoints / totalPoints * 100)",
+    "note": "Criteria with implemented=false carry no points and do not affect score or ready gate."
+  },
+  "assessmentRules": {
+    "requireEvidence": false,
+    "resultValues": [
+      "pass",
+      "flag",
+      "not-assessable"
+    ],
+    "sizingDisclaimer": "Size is a risk signal, not a story-point estimate or a commitment by the development team.",
+    "readyGate": "A story cannot be 'Ready' if any required criterion is 'flag' or 'not-assessable'."
+  },
+  "criteria": [
+    {
+      "id": "story-format",
+      "check": "code",
+      "required": true,
+      "points": 10,
+      "description": "Contains the pattern 'As a ... I want ... so that ...' in title or body.",
+      "passCondition": "A role, goal, and benefit can be extracted."
+    },
+    {
+      "id": "story-context",
+      "check": "code",
+      "required": true,
+      "points": 10,
+      "description": "Names at least product and target group; operator, platforms, and parent epic are recommended.",
+      "passCondition": "Product and target group are present in structured context or clearly stated prose."
+    },
+    {
+      "id": "epic-link",
+      "check": "code",
+      "required": false,
+      "points": 10,
+      "description": "References a parent epic and the epic relationship is verifiable via GitHub. Recommended for traceability, but stories can exist without an epic (e.g., bugfixes, spikes, small features).",
+      "passCondition": "A stable epic issue reference is present and the referenced epic exists in GitHub. The child story should contain a backlink or the epic should list this story."
+    },
+    {
+      "id": "ac-presence",
+      "check": "code",
+      "required": true,
+      "points": 10,
+      "description": "Contains acceptance criteria.",
+      "passCondition": "At least one explicit happy-path scenario and one relevant negative, empty-state, authorization, or error scenario are present. No fixed total number is required."
+    },
+    {
+      "id": "story-links",
+      "check": "code",
+      "required": false,
+      "points": 10,
+      "description": "Documents dependencies on other issues (depends on, blocks, related to, duplicates). Optional; absence is not penalized.",
+      "passCondition": "Passes for any non-empty body; detected link patterns are reported as evidence."
+    },
+    {
+      "id": "ac-testability",
+      "check": "model",
+      "required": true,
+      "points": 17,
+      "description": "Acceptance criteria describe observable, testable outcomes.",
+      "passCondition": "Each criterion has a meaningful condition, action or trigger, and verifiable outcome. Vague terms are either defined or flagged.",
+      "vagueTerms": [
+        "easy",
+        "fast",
+        "better",
+        "appropriate",
+        "user-friendly",
+        "quickly",
+        "timely",
+        "modern",
+        "high quality"
+      ]
+    },
+    {
+      "id": "business-value",
+      "check": "model",
+      "required": false,
+      "points": 16,
+      "description": "The intended user and benefit are explicit and coherent.",
+      "passCondition": "The model quotes the role and benefit from the item; it must not invent business value."
+    },
+    {
+      "id": "size-risk",
+      "check": "model",
+      "required": false,
+      "points": 17,
+      "description": "Flags signs that the item is likely too broad for a single sprint.",
+      "passCondition": "No broadness indicators are present, or any conclusion explicitly remains a risk signal.",
+      "indicators": [
+        "Multiple independent user goals or roles",
+        "Multiple products, platforms, systems, or integrations",
+        "Several independently releasable capabilities joined by 'and' or 'or'",
+        "Words such as 'all', 'complete', 'entire', or 'end-to-end' without a narrow boundary",
+        "A scope that cannot be described as one thin vertical slice"
+      ]
+    },
+    {
+      "id": "independence",
+      "implemented": false,
+      "check": "hybrid",
+      "required": false,
+      "description": "No material duplicate or overlap with candidate stories.",
+      "passCondition": "Similarity search finds no same-goal candidate, or the model explains a material distinction with evidence."
+    }
+  ],
+  "examples": [
+    {
+      "classification": "good-control",
+      "title": "Download invoice as PDF",
+      "summary": "One customer goal with a clear benefit, contextual information, an epic link, and testable happy-path plus negative/authorization scenarios.",
+      "expectedFlags": []
+    },
+    {
+      "classification": "weak",
+      "title": "Improve login",
+      "body": "The login should be better.",
+      "expectedFlags": [
+        "story-format",
+        "story-context",
+        "epic-link",
+        "ac-presence",
+        "business-value",
+        "ac-testability"
+      ]
+    },
+    {
+      "classification": "oversized",
+      "title": "Manage account settings",
+      "body": "As a customer, I want to manage my profile, notification preferences, payment method, and security settings so that my account is up to date.",
+      "expectedFlags": [
+        "story-context",
+        "epic-link",
+        "ac-presence",
+        "size-risk"
+      ],
+      "expectedObservation": "Several independently releasable capabilities; suggest slicing, do not estimate story points."
+    }
+  ]
+}
