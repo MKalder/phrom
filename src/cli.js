@@ -2,12 +2,12 @@
 
 /**
  * Phrom CLI
- * Command-line interface for Phrom agent.
-
+ * Command-line interface for the Phrom assessment pipeline (fixed steps, read-only on GitHub).
+ *
  * Usage:
  * phrom run – Full analysis (all issues, deterministic + AI)
  * phrom list – List all open issues (fast, no AI checks)
- * phrom status – Quick status (deterministic checks only, no AI)
+ * phrom status – Formal pre-check (deterministic checks only, no AI, not a readiness verdict)
  * phrom select – Analyze specific issues (e.g., 12 3 2)
  * phrom filter – Analyze issues by type (story, task, bug, epic)
  * phrom improve – Analyze issue(s) and show concrete improvement suggestions
@@ -23,10 +23,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Import existing agent functions
-import { runAgent, processIssue, determineType, runDeterministicChecks, calculateScore, calculateStatus } from './agent.js';
+// Pipeline functions
+import { runPipeline, processIssue, determineType, runDeterministicChecks } from './agent.js';
 import { listIssues, getIssue } from './tools.js';
-import { generateSummaryReport } from './report.js';
 
 // Ensure output directory exists
 const outputDir = path.join(process.cwd(), 'output');
@@ -41,7 +40,7 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
 program
   .name('phrom')
-  .description('Autonomous agent for GitHub Issue quality assessment')
+  .description('Read-only pipeline that checks GitHub Issues before backlog refinement')
   .version('1.0.0');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,9 +50,9 @@ program
   .command('run')
   .description('Run full analysis on all open issues (deterministic + AI checks)')
   .action(async () => {
-    console.log('🤖 Starting Phrom agent (full analysis)...\n');
+    console.log('🔍 Starting Phrom (full analysis)...\n');
     try {
-      const results = await runAgent();
+      await runPipeline();
       console.log('\n✓ Full analysis complete.');
       console.log(` → Results: ${path.join(outputDir, 'results-*.json')}`);
       console.log(` → Reports: ${path.join(reportsDir, 'issue-*-report-*.md')}`);
@@ -81,7 +80,7 @@ program
           : '[no labels]';
         console.log(`#${issue.number}: ${issue.title} ${labels}`);
       }
-      console.log(`\n✓ Done in ${(process.uptime() % 60).toFixed(1)}s`);
+      console.log(`\n✓ Done in ${process.uptime().toFixed(1)}s`);
     } catch (error) {
       console.error('❌ Error:', error.message);
       process.exit(1);
@@ -93,9 +92,9 @@ program
 // ─────────────────────────────────────────────────────────────────────────────
 program
   .command('status')
-  .description('Show quick status (deterministic checks only, no AI)')
+  .description('Formal pre-check: share of passed deterministic checks (no AI, no Ready Gate, not a readiness verdict)')
   .action(async () => {
-    console.log('📊 Calculating status (deterministic checks only)...\n');
+    console.log('📊 Formal pre-check (deterministic checks only, no AI)...\n');
     try {
       const issues = await listIssues();
       console.log(`Processing ${issues.length} issues...\n`);
@@ -110,33 +109,31 @@ program
         const passed = checksArray.filter(c => c && c.passed).length;
         const total = checksArray.length;
 
+        // Value 0–50 = share of passed checks; bands: ≥40 (≥80 %), ≥25 (≥50 %), below.
         const detScore = total > 0 ? Math.round((passed / total) * 50) : 0;
-        const status = detScore >= 40 ? 'ready' : detScore >= 25 ? 'needs-work' : 'not-ready';
-        const statusEmoji = status === 'ready' ? '🟢' : status === 'needs-work' ? '🟡' : '🔴';
+        const band = detScore >= 40 ? 'high' : detScore >= 25 ? 'partial' : 'low';
+        const bandEmoji = band === 'high' ? '🟢' : band === 'partial' ? '🟡' : '🔴';
 
-        results.push({
-          issue: { number: fullIssue.number, title: fullIssue.title },
-          type,
-          score: detScore,
-          status,
-          statusEmoji,
-          passed,
-          total
-        });
+        results.push({ number: fullIssue.number, type, score: detScore, band, passed, total });
 
-        console.log(`${statusEmoji} #${fullIssue.number}: ${fullIssue.title} – ${detScore}/50 (det: ${passed}/${total})`);
+        // Output format is parsed by scripts/demo.js – keep "– <n>/50 (det: <p>/<t>)".
+        console.log(`${bandEmoji} #${fullIssue.number}: ${fullIssue.title} – ${detScore}/50 (det: ${passed}/${total})`);
       }
 
-      const ready = results.filter(r => r.status === 'ready').length;
-      const needsWork = results.filter(r => r.status === 'needs-work').length;
-      const notReady = results.filter(r => r.status === 'not-ready').length;
+      const high = results.filter(r => r.band === 'high').length;
+      const partial = results.filter(r => r.band === 'partial').length;
+      const low = results.filter(r => r.band === 'low').length;
+      const complete = results.filter(r => r.total > 0 && r.passed === r.total).length;
 
-      console.log(`\n=== Summary ===`);
-      console.log(`🟢 Ready: ${ready}`);
-      console.log(`🟡 Needs work: ${needsWork}`);
-      console.log(`🔴 Not ready: ${notReady}`);
+      console.log(`\n=== Formal pre-check ===`);
+      console.log(`🟢 at least 80 % of formal checks passed: ${high}`);
+      console.log(`🟡 50–79 % of formal checks passed: ${partial}`);
+      console.log(`🔴 below 50 % of formal checks passed: ${low}`);
+      console.log(`All formal checks passed – ${complete} of ${issues.length} issues`);
       console.log(`Total: ${issues.length} issues`);
-      console.log(`\n✓ Done in ${(process.uptime() % 60).toFixed(1)}s (deterministic only)`);
+      console.log(`\nNot a readiness verdict: AI criteria and the Ready Gate are not part of this check.`);
+      console.log(`Use run, select, filter or improve for the assessment.`);
+      console.log(`\n✓ Done in ${process.uptime().toFixed(1)}s (deterministic only)`);
     } catch (error) {
       console.error('❌ Error:', error.message);
       process.exit(1);
@@ -164,7 +161,7 @@ program
         const statusEmoji = result.status === 'ready' ? '🟢' : result.status === 'needs-work' ? '🟡' : '🔴';
         console.log(` ${statusEmoji} Score: ${result.score}/100 – ${result.status}`);
 
-        // Timing-Ausgabe pro Issue
+        // Timing per issue
         if (result.timings) {
           const detTime = result.timings.deterministic.toFixed(1);
           const modelTime = (result.timings.model / 1000).toFixed(1);
@@ -191,7 +188,7 @@ program
     console.log(`🔴 Not ready: ${notReady}`);
     console.log(`Total: ${results.length} issues`);
 
-    // Reports speichern (KEINE Improvements)
+    // Save reports (no improvements here)
     const { generateMarkdownReport, generateSummaryReport } = await import('./report.js');
 
     if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
@@ -259,7 +256,7 @@ program
         const statusEmoji = result.status === 'ready' ? '🟢' : result.status === 'needs-work' ? '🟡' : '🔴';
         console.log(` ${statusEmoji} Score: ${result.score}/100 – ${result.status}`);
 
-        // Timing-Ausgabe pro Issue
+        // Timing per issue
         if (result.timings) {
           const detTime = result.timings.deterministic.toFixed(1);
           const modelTime = (result.timings.model / 1000).toFixed(1);
@@ -278,7 +275,7 @@ program
       console.log(`🔴 Not ready: ${notReady}`);
       console.log(`Total: ${results.length} issues`);
 
-      // Reports speichern (KEINE Improvements)
+      // Save reports (no improvements here)
       const { generateMarkdownReport, generateSummaryReport } = await import('./report.js');
 
       if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
@@ -303,7 +300,7 @@ program
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// phrom improve (UNTERSTÜTZT JETZT MEHRERE ISSUES)
+// phrom improve (one or more issues)
 // ─────────────────────────────────────────────────────────────────────────────
 program
   .command('improve <numbers...>')
@@ -317,7 +314,7 @@ program
         const issue = await getIssue(parseInt(num));
         console.log(`Processing Issue #${issue.number}: "${issue.title}"`);
 
-        // Analyse mit Timing
+        // Analysis with timing
         const analysisStart = performance.now();
         const result = await processIssue(issue);
         const analysisDuration = performance.now() - analysisStart;
@@ -330,7 +327,7 @@ program
         console.log(`Status: ${result.status}`);
         console.log(`\nSummary: ${result.summary}`);
 
-        // Analyse-Timing anzeigen
+        // Show analysis timing
         if (result.timings) {
           const detTime = result.timings.deterministic.toFixed(1);
           const modelTime = (result.timings.model / 1000).toFixed(1);
@@ -339,9 +336,9 @@ program
           console.log(`   Model: ${modelTime} s`);
         }
 
-        // Improvements mit Timing
+        // Improvements with timing
         console.log(`\n🤖 Generating improvement suggestions...`);
-        console.log(`   (This may take 10–30 seconds)\n`);
+        console.log(`   (Speed depends on your hardware and model.)\n`);
 
         const improveStart = performance.now();
         const { generateAllSuggestions, generateImprovementReport } = await import('./improve.js');
@@ -350,7 +347,7 @@ program
         const revisedDraft = suggestionsObj.revisedDraft || '';
         const improveDuration = performance.now() - improveStart;
 
-        // Improvement-Timing anzeigen
+        // Show improvement timing
         console.log(`\n⏱️  Improvement Timing:`);
         console.log(`   Suggestions + Draft: ${(improveDuration / 1000).toFixed(1)} s`);
 
@@ -369,7 +366,7 @@ program
           console.log(`\n✅ No improvements needed – issue is ready!`);
         }
 
-        // Report speichern
+        // Save report
         const { generateMarkdownReport } = await import('./report.js');
         const markdown = generateMarkdownReport(result, result.type);
         if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
@@ -377,7 +374,7 @@ program
         const reportPath = path.join(reportsDir, `issue-${result.issueNumber}-report-${timestamp}.md`);
         fs.writeFileSync(reportPath, markdown, 'utf-8');
 
-        // Improvement report speichern
+        // Save improvement report
         const improvementsDir = path.join(outputDir, 'improvement-suggestions');
         if (!fs.existsSync(improvementsDir)) fs.mkdirSync(improvementsDir, { recursive: true });
         const improvementMarkdown = generateImprovementReport(result, suggestions, revisedDraft);
@@ -398,7 +395,7 @@ program
       process.exit(1);
     }
 
-    // Summary für alle verbesserten Issues
+    // Summary for all improved issues
     const { generateSummaryReport } = await import('./report.js');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const summaryMarkdown = generateSummaryReport(results);

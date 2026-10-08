@@ -11,6 +11,7 @@ const BANNER = `
 
 const depth = process.stdout.getColorDepth?.() ?? 1;
 
+// one love 🇹🇭
 const THAI_STRIPES = [
     { rgb: [165, 25, 49], c256: 124, fallback: 'red' },
     { rgb: [244, 245, 248], c256: 255, fallback: 'white' },

@@ -7,13 +7,13 @@
 
 ## Context
 
-Phrom consists of two parts: the code (Node.js, rules, and tests) and the demo backlog (GitHub Issues assessed by Phrom). The question is whether both should reside in a single repository or in two separate repositories.
+Phrom consists of two parts: the code (Node.js, rules, scripts, and seed data) and the demo backlog (GitHub Issues assessed by Phrom). The question is whether both should reside in a single repository or in two separate repositories.
 
 A single repository would be easier to manage. Two repositories clearly separate code and data, allow different visibility settings, and prevent actual development issues from being mixed with demo data.
 
 ## Decision Drivers
 
-- **Clear scope:** For demonstration purposes, the AI assistant should initially assess only demo issues, not actual development issues.
+- **Clear scope:** For demonstration purposes, Phrom should initially assess only demo issues, not actual development issues.
 - **Reusability:** The demo backlog should be resettable at any time without affecting the code.
 - **Security:** A separate demo repository allows a token to be restricted to that repository.
 - **Portfolio clarity:** Interested parties should be able to explore the code and the demo separately.
@@ -23,9 +23,9 @@ A single repository would be easier to manage. Two repositories clearly separate
 
 **Option A: One repository.** Code and issues reside in the same repository. Advantages: less administration and everything in one place. Disadvantages: demo issues and actual development issues are mixed, resetting the backlog is risky, and the token has access to both.
 
-**Option B: Two repositories.** `phrom` contains the code, rules, and tests. `phrom-backlog-demo` contains only demo issues. Advantages: clear separation, restricted token access, and an isolated reset process. Disadvantages: two repositories to maintain, and Phrom requires repository configuration.
+**Option B: Two repositories.** `phrom` contains the code, rules, and seed data. `phrom-backlog-demo` contains only demo issues. Advantages: clear separation, restricted token access, and an isolated reset process. Disadvantages: two repositories to maintain, and Phrom requires repository configuration.
 
-**Option C: One repository with strict label filtering.** All issues reside in the same repository, but the agent filters by `demo-seed`. Advantages: only one repository. Disadvantages: filtering is error-prone, actual development issues remain within the token's scope, and the repository may become harder to navigate.
+**Option C: One repository with strict label filtering.** All issues reside in the same repository, but Phrom filters by `demo-seed`. Advantages: only one repository. Disadvantages: filtering is error-prone, actual development issues remain within the token's scope, and the repository may become harder to navigate.
 
 ## Decision
 
@@ -33,9 +33,9 @@ I choose **Option B: Two repositories**.
 
 Rationale:
 
-- **Security:** The fine-grained token can be restricted to `phrom-backlog-demo`. Even if the agent fails, only demo data is affected.
+- **Security:** The fine-grained token can be restricted to `phrom-backlog-demo`. Only demo data is in the token's scope.
 - **Reproducibility:** The demo repository can be reset at any time by deleting issues and running the seed script, without affecting the code.
-- **Clear scope:** The agent assesses only demo issues. Actual development issues in the code repository are outside its scope.
+- **Clear scope:** Phrom assesses only demo issues. Actual development issues in the code repository are outside its scope.
 - **Portfolio:** Interested parties can explore the architecture in the code repository and see Phrom's results in the demo repository.
 
 ## Consequences
@@ -44,7 +44,7 @@ Rationale:
 
 - The token has access only to the demo repository.
 - Demo issues can be reset without risking the code or actual development issues.
-- The agent has a clear scope: only `phrom-backlog-demo`.
+- Phrom has a clear scope: only `phrom-backlog-demo`.
 
 ### Negative / Risks
 

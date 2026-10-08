@@ -1,0 +1,209 @@
+{
+  "version": "0.3.0",
+  "artifactType": "epic-check-criteria",
+  "scope": "Pre-refinement assessment of epic clarity and boundaries. This does not replace discovery, prioritization, or team estimation.",
+  "scoring": {
+    "totalPoints": 73,
+    "formula": "score = round(earnedPoints / totalPoints * 100)",
+    "note": "Criteria with implemented=false carry no points and do not affect score or ready gate."
+  },
+  "assessmentRules": {
+    "requireEvidence": true,
+    "resultValues": [
+      "pass",
+      "flag",
+      "not-assessable"
+    ],
+    "readyGate": "An epic cannot be 'Ready' if any required criterion is 'flag' or 'not-assessable'.",
+    "assessmentIncomplete": "If Ollama is unavailable or model checks fail, assessment status is 'incomplete' and must be retried."
+  },
+  "criteria": [
+    {
+      "id": "goal-statement",
+      "check": "code",
+      "required": true,
+      "points": 15,
+      "description": "States a SMART goal.",
+      "passCondition": "A goal section or phrase exists and at least two of three SMART hints (specific, measurable, time-bound) are detected."
+    },
+    {
+      "id": "benefit-statement",
+      "check": "code",
+      "required": true,
+      "points": 15,
+      "description": "Quantifies the intended benefit.",
+      "passCondition": "A benefit section or phrase exists and contains a quantification (number with unit, or reduce/increase/save)."
+    },
+    {
+      "id": "story-list",
+      "check": "code",
+      "required": true,
+      "points": 10,
+      "description": "Lists child stories by issue number.",
+      "passCondition": "At least one issue reference (#n) is present in the body."
+    },
+    {
+      "id": "size-risk",
+      "check": "model",
+      "required": true,
+      "points": 17,
+      "description": "Flags signs that the epic is too large.",
+      "passCondition": "Estimated size is S or M; L and XL fail.",
+      "indicators": [
+        "Programme-level scope across several product domains or platforms",
+        "Several independent customer outcomes in one epic",
+        "Words such as 'all', 'every', or 'complete' without a narrow boundary",
+        "No coherent product boundary that a single team could own"
+      ]
+    },
+    {
+      "id": "epic-goal",
+      "check": "model",
+      "required": true,
+      "points": 8,
+      "description": "States an outcome-oriented goal.",
+      "passCondition": "The goal identifies a user or business outcome and is not merely a technology or activity label."
+    },
+    {
+      "id": "epic-benefit",
+      "check": "model",
+      "required": true,
+      "points": 8,
+      "description": "States an intended benefit.",
+      "passCondition": "The model can quote the intended benefit without inventing one."
+    },
+    {
+      "id": "epic-context",
+      "implemented": false,
+      "check": "code",
+      "required": true,
+      "description": "Names at least product and target group; operator and platforms are recommended.",
+      "passCondition": "Product and target group are stated in structured context or clearly stated prose."
+    },
+    {
+      "id": "epic-boundary",
+      "implemented": false,
+      "check": "code",
+      "required": true,
+      "description": "Has an explicit in-scope and out-of-scope boundary.",
+      "passCondition": "Both sections are present and contain at least one meaningful item."
+    },
+    {
+      "id": "epic-success-measure",
+      "implemented": false,
+      "check": "model",
+      "required": false,
+      "description": "Provides a measurable outcome or explicitly flags that a baseline/target still needs product validation.",
+      "passCondition": "A measure is stated without fabricated certainty, or the missing measurement is transparently flagged."
+    },
+    {
+      "id": "epic-slicing",
+      "implemented": false,
+      "check": "model",
+      "required": true,
+      "description": "Can be broken into independently discussable candidate stories or thin vertical slices.",
+      "passCondition": "The model proposes or validates at least two distinct user-value slices, with evidence from the epic."
+    },
+    {
+      "id": "epic-owner",
+      "implemented": false,
+      "check": "code",
+      "required": true,
+      "description": "Names one accountable owner for the epic.",
+      "passCondition": "An owner is explicitly named with a role or team."
+    },
+    {
+      "id": "epic-stakeholders",
+      "implemented": false,
+      "check": "code",
+      "required": true,
+      "description": "Names the relevant stakeholder groups or people.",
+      "passCondition": "At least one stakeholder group is explicitly named; impacted or approving stakeholders should be identifiable."
+    },
+    {
+      "id": "epic-company-goal",
+      "implemented": false,
+      "check": "model",
+      "required": true,
+      "description": "Links the epic to an overarching company or product goal.",
+      "passCondition": "The company or product objective is explicitly stated or linked. The model must not invent the relationship."
+    },
+    {
+      "id": "epic-milestones",
+      "implemented": false,
+      "check": "model",
+      "required": true,
+      "description": "Defines meaningful milestones for the epic.",
+      "passCondition": "At least two milestones are stated, or the epic explicitly flags milestones as an open planning question."
+    },
+    {
+      "id": "epic-timeline",
+      "implemented": false,
+      "check": "model",
+      "required": false,
+      "description": "Provides an indicative timeline.",
+      "passCondition": "A start, target, timeframe, or explicitly open timeline question is present."
+    },
+    {
+      "id": "epic-risks",
+      "implemented": false,
+      "check": "model",
+      "required": false,
+      "description": "Identifies relevant risks and mitigations.",
+      "passCondition": "Known risks have mitigations, or the epic transparently flags risk discovery as open."
+    },
+    {
+      "id": "epic-dependencies",
+      "implemented": false,
+      "check": "model",
+      "required": false,
+      "description": "Documents cross-team or external dependencies.",
+      "passCondition": "Dependencies are named with affected team/system, or the epic explicitly states that dependency discovery is open."
+    },
+    {
+      "id": "epic-child-story-status",
+      "implemented": false,
+      "check": "hybrid",
+      "required": false,
+      "description": "Existing child stories have traceable GitHub links and current statuses.",
+      "passCondition": "Referenced child issues exist in GitHub, point back to the epic, and their status is reported; missing links are flagged."
+    }
+  ],
+  "examples": [
+    {
+      "classification": "good-control",
+      "title": "Invoice self-service",
+      "summary": "Outcome, benefit, scope boundaries, candidate stories, owner, stakeholders, milestones, and a deliberately cautious success-measure statement are present.",
+      "expectedFlags": []
+    },
+    {
+      "classification": "weak",
+      "title": "Modernize the portal",
+      "body": "The customer portal should be modern and better.",
+      "expectedFlags": [
+        "epic-context",
+        "epic-goal",
+        "epic-benefit",
+        "epic-boundary",
+        "epic-success-measure",
+        "epic-slicing",
+        "epic-oversize-risk",
+        "epic-owner",
+        "epic-stakeholders",
+        "epic-company-goal",
+        "epic-milestones"
+      ]
+    },
+    {
+      "classification": "oversized",
+      "title": "Digital customer experience",
+      "body": "Build web and mobile experiences for onboarding, billing, payments, support, notifications, profile management, and all account changes for every customer segment.",
+      "expectedFlags": [
+        "epic-boundary",
+        "epic-slicing",
+        "epic-oversize-risk"
+      ],
+      "expectedObservation": "Programme-level scope across multiple domains and platforms; recommend split by customer outcome or product domain."
+    }
+  ]
+}

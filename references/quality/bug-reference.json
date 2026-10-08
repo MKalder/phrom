@@ -1,0 +1,125 @@
+{
+  "version": "0.1.0",
+  "artifactType": "reference-bug",
+  "purpose": "Canonical example for bug report quality. Use as a guide for evaluating bug reports.",
+  "bug": {
+    "title": "PDF download fails on mobile Safari (iOS 17)",
+    "type": "bug",
+    "environment": {
+      "browser": "Safari 17.2",
+      "os": "iOS 17.2",
+      "device": "iPhone 15 Pro",
+      "environment": "Staging",
+      "appVersion": "2.8.4",
+      "network": "WiFi (5GHz)"
+    },
+    "description": "When a customer attempts to download an invoice PDF on mobile Safari (iOS 17), the download fails with error 500: 'Blob URL not found'. The issue occurs consistently across all iOS 17 devices and affects approximately 30% of our mobile user base.",
+    "stepsToReproduce": [
+      "Login to the customer portal on iOS 17 Safari",
+      "Navigate to 'My Invoices' page",
+      "Click on any invoice row to select it",
+      "Click the 'Download PDF' button",
+      "Observe error message: 'Error 500: Blob URL not found'"
+    ],
+    "expectedResult": "PDF download starts within 3 seconds, file is saved to device Downloads folder.",
+    "actualResult": "Error 500 modal appears with message 'Blob URL not found'. No download initiated. Console shows: 'Failed to fetch blob://...'",
+    "severity": "Major",
+    "severityJustification": "Core feature (invoice download) is completely broken for iOS users. No workaround available. Affects ~30% of mobile user base.",
+    "priority": "P1",
+    "priorityJustification": "High business impact – customers cannot access invoices for tax documentation. Legal compliance risk (invoice retention requirement). High visibility (affects all iOS 17 users).",
+    "frequency": "Always (100% reproduction rate)",
+    "firstObserved": "2026-09-28",
+    "attachments": [
+      "screenshot-error-modal.png",
+      "console-log.txt",
+      "network-tab-har.json",
+      "screen-recording-download-fail.mp4"
+    ],
+    "technicalImpact": [
+      "Customer cannot download invoices on iOS 17",
+      "Increased support ticket volume (estimated +50 tickets/week)",
+      "Potential legal compliance issue (invoice retention)"
+    ],
+    "workaround": "None available. Desktop browsers (Chrome, Firefox, Safari macOS) work correctly."
+  },
+  "qualityCriteria": {
+    "reproductionSteps": {
+      "status": "✅ Pass",
+      "evidence": "5 numbered steps, specific and sequential, starting from known state (logged in)."
+    },
+    "expectedVsActual": {
+      "status": "✅ Pass",
+      "evidence": "Clear separation: expected (download within 3s) vs. actual (Error 500, no download)."
+    },
+    "environmentInfo": {
+      "status": "✅ Pass",
+      "evidence": "Complete: browser (Safari 17.2), OS (iOS 17.2), device (iPhone 15 Pro), environment (Staging), app version (2.8.4)."
+    },
+    "severityJustified": {
+      "status": "✅ Pass",
+      "evidence": "Severity 'Major' justified with impact (core feature broken, 30% users affected, no workaround)."
+    },
+    "priorityJustified": {
+      "status": "✅ Pass",
+      "evidence": "Priority 'P1' justified with business impact (legal compliance, support volume, user visibility)."
+    },
+    "acPresence": {
+      "status": "✅ Pass",
+      "evidence": "3 acceptance criteria for fix verification (download works, error resolved, console clean)."
+    },
+    "acTestability": {
+      "status": "✅ Pass",
+      "evidence": "All AC are SMART: Specific (PDF downloads), Measurable (within 3s, 0 errors), Testable."
+    },
+    "sizeRisk": {
+      "status": "✅ Pass",
+      "evidence": "Well-scoped bug fix. Estimated: M (medium) due to iOS-specific blob handling complexity."
+    }
+  },
+  "acceptanceCriteriaForFix": {
+    "verification": [
+      {
+        "id": "VC1",
+        "gherkin": "Given I am on iOS 17 Safari, when I click 'Download PDF', then the download starts within 3 seconds.",
+        "type": "Fix Verification",
+        "measurement": "PDF download initiates, file appears in Downloads folder"
+      },
+      {
+        "id": "VC2",
+        "gherkin": "Given the download completes, when I open the PDF, then it contains all required fields (invoice number, date, total, customer number).",
+        "type": "Content Verification",
+        "measurement": "PDF contains all mandatory fields, no corruption"
+      },
+      {
+        "id": "VC3",
+        "gherkin": "Given the fix is deployed, when I check browser console, then there are no blob URL errors.",
+        "type": "Regression Prevention",
+        "measurement": "Console shows 0 errors related to blob URLs"
+      }
+    ]
+  },
+  "whyThisIsReferenceQuality": [
+    "Title answers What (download fails), Where (mobile Safari), When (iOS 17).",
+    "Environment section is complete: browser, OS, device, environment, app version.",
+    "Reproduction steps are numbered, sequential, and specific (5 steps, anyone can follow).",
+    "Expected vs. Actual clearly separated with concrete outcomes and error messages.",
+    "Severity and Priority both justified with data (30% users, legal compliance, support volume).",
+    "Frequency and first observed date documented for triage.",
+    "Attachments listed (screenshot, logs, HAR, video) for faster debugging.",
+    "Acceptance criteria for fix verification in Gherkin format (testable by automation)."
+  ],
+  "howToUseThisReference": [
+    "Use as a template for structuring bug reports: environment → description → steps → expected/actual → severity/priority.",
+    "Compare your bug against this reference: Do you have 3+ reproduction steps?",
+    "Check if your expected/actual results are as specific as this reference.",
+    "Ensure severity and priority are justified with data (impact, frequency, business risk).",
+    "Use the acceptance criteria as a template for fix verification."
+  ],
+  "differencesFromStory": [
+    "No 'As a user...' format – bugs use descriptive title (What + Where + When).",
+    "Focus on reproduction (steps, environment) vs. user value (so that...).",
+    "Requires severity/priority justification – stories use business value instead.",
+    "Expected vs. Actual critical – stories use acceptance criteria only.",
+    "Attachments (screenshots, logs) highly recommended – optional for stories."
+  ]
+}

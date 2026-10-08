@@ -1,5 +1,8 @@
 /**
- * tools.js – GitHub tools using @octokit/rest.
+ * tools.js – Read-only GitHub access using @octokit/rest (REST API).
+ *
+ * Phrom only reads issues. There is deliberately no function that writes to GitHub;
+ * a fine-grained token with "Issues: Read-only" is sufficient.
  *
  * Configuration through .env:
  * GITHUB_TOKEN=your_token
@@ -31,7 +34,6 @@ export async function listIssues(label = null) {
         owner: OWNER,
         repo: REPO,
         state: "open",
-        filter: "all",
         per_page: 100,
     };
 
@@ -39,7 +41,8 @@ export async function listIssues(label = null) {
         params.labels = label;
     }
 
-    const { data } = await octokit.issues.listForRepo(params);
+    // paginate() follows all result pages; a single call returns at most 100 items.
+    const data = await octokit.paginate(octokit.issues.listForRepo, params);
 
     return data
         .filter((item) => !item.pull_request)
@@ -71,22 +74,4 @@ export async function getIssue(number) {
         state: data.state,
         htmlUrl: data.html_url,
     };
-}
-
-/**
- * Post a comment to an issue.
- *
- * @param {number} issueNumber
- * @param {string} body
- * @returns {Promise<Object>}
- */
-export async function postComment(issueNumber, body) {
-    const { data } = await octokit.issues.createComment({
-        owner: OWNER,
-        repo: REPO,
-        issue_number: issueNumber,
-        body,
-    });
-
-    return data;
 }

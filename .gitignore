@@ -1,22 +1,11 @@
 # folder
 reset_backlog
-docs-de
 node_modules
-case-study
-dor_refinement
-output
-*deprecated
-*doc
-db
-references
+archive
+audit
 
 # Env
 .env
 
 # files
-workflow-issue-check.md
-phrom_cli.md
-phrom-workflow.md
-phrom_improve.md
-ASIS_IMPLEMENTATION.md
-phrom-referenz-abgleich-konzept.md
+docs/assets/phrom-demo.mov

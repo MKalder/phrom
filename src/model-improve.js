@@ -3,9 +3,110 @@
  * LLM-powered improvement suggestions AND complete issue draft.
  */
 
-import ollama from 'ollama';
+import { ollama, MODEL_NAME } from './ollama-client.js';
 
-const MODEL_NAME = process.env.MODEL_NAME || 'qwen3:30b-instruct';
+/**
+ * Runs a generation as a stream and returns the complete text.
+ *
+ * Why streaming: a non-streaming call only returns response headers after the whole text is
+ * generated. Node's fetch (undici) aborts if no headers arrive within 5 minutes ("fetch failed"),
+ * which long drafts on slower hardware exceed. With a stream, data flows from the first token.
+ */
+async function generateText(prompt, options, format) {
+  const stream = await ollama.generate({
+    model: MODEL_NAME,
+    prompt,
+    options,
+    stream: true,
+    ...(format ? { format } : {}),
+  });
+
+  let text = '';
+  for await (const part of stream) {
+    text += part.response ?? '';
+  }
+  return text.trim();
+}
+
+/** "goalStatement", "goal-statement" and "Goal_Statement" are the same criterion. */
+const normalizeId = (id) => String(id ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Safety net against invented facts. Issue references, percentages, ISO dates and quarters are only kept if the
+ * original issue contains them; everything else becomes a placeholder.
+ */
+export function sanitizeDraft(draft, originalText = '') {
+  const original = String(originalText);
+  let text = draft;
+  let replaced = 0;
+
+  const swap = (pattern, placeholder) => {
+    text = text.replace(pattern, (match) => {
+      if (original.includes(match)) return match;
+      replaced += 1;
+      return placeholder;
+    });
+  };
+
+  swap(/#\d+/g, '#[number]');
+  swap(/\b\d+(?:[.,]\d+)?\s?%/g, '[x]%');
+  swap(/\b(?:19|20)\d{2}-\d{2}-\d{2}\b/g, '[date]');
+  swap(/\bQ[1-4]\b/g, '[quarter]');
+
+  return { text, replaced };
+}
+
+/** Required draft structure per issue type (only the matching one is sent to the model). */
+const STRUCTURES = {
+  story: `## Context
+- Operator: [your company/product]
+- Product: [product name]
+- Target Group: [user group]
+- Part of Epic: #[number] [epic title]
+
+## Story
+As a [role], I want [feature], so that [benefit].
+
+## Acceptance Criteria
+**Happy Path**
+- [ ] Given [initial context], when [action], then [expected result]
+
+**Error Cases**
+- [ ] Given [error context], when [action], then [error message / behavior]
+
+## Dependencies
+- Depends on #[number] ([title])
+- Blocks #[number] ([title])
+- Related to #[number] ([title])`,
+  epic: `## Context
+## Company Goal
+## Goal
+## Benefits
+## Scope
+### In Scope
+### Out of Scope
+## Owner
+## Stakeholders
+## Child Stories / Candidate Slices
+## Milestones
+## Success Measures
+## Risks and Mitigations
+## Dependencies`,
+  task: `## Context
+## Justification
+## Technical Scope
+## Impact Analysis
+## Rollback Plan
+## Verification Criteria
+## Dependencies`,
+  bug: `## Steps to Reproduce
+## Expected Behavior
+## Actual Behavior
+## Environment
+## Severity
+## Reproducibility
+## Verification Criteria`,
+};
 
 /**
  * Generate a complete revised issue draft based on one reference quality example.
@@ -50,87 +151,31 @@ Write a COMPLETE revised issue description that:
 4. Marks uncertain information as "Open discovery question: [question]"
 5. Does NOT copy concrete names, numbers, issue IDs, dates, metrics, systems, or business facts from the reference
 6. Is written entirely in English
+7. NEVER invents issue numbers, dates, quarters, percentages, thresholds, user counts, standards, tools or scope items. If the original issue does not state it, write a [placeholder] or an "Open discovery question: [question]" instead
+9. For sections of the required structure where the ORIGINAL ISSUE contains no information (for example Scope, Owner, Stakeholders, Milestones, Success Measures, Risks, Dependencies), writes ONLY [placeholders] or "Open discovery question: [question]". Do not propose content, numbers or thresholds for them
+8. Lists candidate stories or slices WITHOUT issue numbers (for example "- [Slice: user outcome]"). Only reference an issue number that appears in the ORIGINAL ISSUE above
 
 REQUIRED STRUCTURE (adapt based on type):
-
-For stories:
-## Context
-- Operator: [your company/product]
-- Product: [product name]
-- Target Group: [user group]
-- Part of Epic: #[number] [epic title]
-
-## Story
-As a [role], I want [feature], so that [benefit].
-
-## Acceptance Criteria
-**Happy Path**
-- [ ] Given [initial context], when [action], then [expected result]
-
-**Error Cases**
-- [ ] Given [error context], when [action], then [error message / behavior]
-
-## Dependencies
-- Depends on #[number] ([title])
-- Blocks #[number] ([title])
-- Related to #[number] ([title])
-
-For epics:
-## Context
-## Company Goal
-## Goal
-## Benefits
-## Scope
-### In Scope
-### Out of Scope
-## Owner
-## Stakeholders
-## Child Stories / Candidate Slices
-## Milestones
-## Success Measures
-## Risks and Mitigations
-## Dependencies
-
-For tasks:
-## Context
-## Justification
-## Technical Scope
-## Impact Analysis
-## Rollback Plan
-## Verification Criteria
-## Dependencies
-
-For bugs:
-## Steps to Reproduce
-## Expected Behavior
-## Actual Behavior
-## Environment
-## Severity
-## Reproducibility
-## Verification Criteria
+${STRUCTURES[type] ?? STRUCTURES.story}
 
 OUTPUT:
 Provide ONLY the Markdown issue description. No JSON, no explanations, no meta-commentary.
 `.trim();
 
   try {
-    const response = await ollama.generate({
-      model: MODEL_NAME,
-      prompt,
-      options: {
-        temperature: 0.3,
-        top_p: 0.9,
-      },
-    });
-
-    const draft = response.response?.trim();
+    const draft = await generateText(prompt, { temperature: 0.3, top_p: 0.9 });
 
     if (!draft) {
       console.warn('LLM returned an empty revised issue draft.');
       return '';
     }
 
-    return draft;
+    const { text, replaced } = sanitizeDraft(draft, `${issue.title}\n${issue.body ?? ''}`);
+    if (replaced > 0) {
+      console.warn(`Draft: ${replaced} invented value(s) (issue numbers, percentages, dates, quarters) replaced by placeholders.`);
+    }
+
+    return text;
   } catch (error) {
     console.error(`Revised draft generation failed: ${error.message}`);
     return '';
@@ -182,25 +227,14 @@ RULES:
 - Do NOT copy reference values
 - Output ONLY the JSON array, nothing else
 
-EXAMPLE OUTPUT:
+EXAMPLE OUTPUT (use the exact criterion IDs from the list above as "check"):
 [
-  {"check":"goalStatement","suggestion":"Make it SMART","before":"(not present)","after":"Goal: [metric] from [X] to [Y] by [date]"},
-  {"check":"benefitStatement","suggestion":"Quantify benefits","before":"(not present)","after":"Benefits: Customers save [X], team saves [Y]"}
+  {"check":"${failedCriteria[0]}","suggestion":"What to improve","before":"(not present)","after":"Recommended text with [placeholders]"}
 ]
 `.trim();
 
   try {
-    const response = await ollama.generate({
-      model: MODEL_NAME,
-      prompt,
-      format: 'json',
-      options: {
-        temperature: 0.2,
-        top_p: 0.9,
-      },
-    });
-
-    const rawResponse = response.response?.trim() || '';
+    const rawResponse = await generateText(prompt, { temperature: 0.2, top_p: 0.9 }, 'json');
 
     if (!rawResponse) {
       console.warn('LLM returned an empty improvement response.');
@@ -254,7 +288,7 @@ EXAMPLE OUTPUT:
       return [];
     }
 
-    const validChecks = new Set(failedCriteria);
+    const canonical = new Map(failedCriteria.map((id) => [normalizeId(id), id]));
 
     return parsed
       .filter(
@@ -265,9 +299,9 @@ EXAMPLE OUTPUT:
           typeof suggestion.suggestion === 'string' &&
           typeof suggestion.after === 'string'
       )
-      .filter((suggestion) => validChecks.has(suggestion.check))
+      .filter((suggestion) => canonical.has(normalizeId(suggestion.check)))
       .map((suggestion) => ({
-        check: suggestion.check.trim(),
+        check: canonical.get(normalizeId(suggestion.check)),
         suggestion: suggestion.suggestion.trim(),
         before:
           typeof suggestion.before === 'string' && suggestion.before.trim()

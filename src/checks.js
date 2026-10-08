@@ -30,8 +30,8 @@ export function checkStoryFormat(body) {
   ];
 
   const alternativePatterns = [
-    /in\s+order\s+to\s+.*,\\s*as\s+a\s+\w+.*\s+i\s+want\s+.*/i,
-    /um\s+.*\s+zu\s+.*,\\s*als\s+\w+.*\s+möchte\s+ich\s+.*/i,
+    /in\s+order\s+to\s+.*,\s*as\s+a\s+\w+.*\s+i\s+want\s+.*/i,
+    /um\s+.*\s+zu\s+.*,\s*als\s+\w+.*\s+möchte\s+ich\s+.*/i,
   ];
 
   const allPatterns = [...germanPatterns, ...englishPatterns, ...alternativePatterns];
@@ -79,31 +79,30 @@ export function checkContext(body) {
     "requirement", "need", "pain point", "problem"
   ];
 
-  const contextPatterns = [
-    /as a\s+(user|customer|admin|role)/i,
-    /for\s+(the\s+)?(user|customer|client)/i,
-    /in the\s+(product|system|app)/i,
-    /within the\s+(context|scope)/i,
-  ];
+  // Whole-word matching: "app" must not match "applied", "need" not "needed" etc.
+  const foundProduct = findWords(body, productKeywords);
+  const foundUser = findWords(body, userKeywords);
+  const foundBusiness = findWords(body, businessKeywords);
 
-  const foundProduct = productKeywords.filter(kw => body.toLowerCase().includes(kw));
-  const foundUser = userKeywords.filter(kw => body.toLowerCase().includes(kw));
-  const foundBusiness = businessKeywords.filter(kw => body.toLowerCase().includes(kw));
-  const matchedPattern = contextPatterns.some(p => p.test(body));
-
-  const totalMatches = foundProduct.length + foundUser.length + foundBusiness.length + (matchedPattern ? 1 : 0);
-
-  if (totalMatches === 0) {
-    return { passed: false, reason: "No context (product, target group, or business value) found" };
+  // Rule: product AND target group must be named (business value is judged by the AI check).
+  if (foundProduct.length === 0 || foundUser.length === 0) {
+    const missing = [
+      foundProduct.length === 0 ? "product" : null,
+      foundUser.length === 0 ? "target group" : null,
+    ].filter(Boolean).join(" and ");
+    return {
+      passed: false,
+      reason: `No context (${missing}) found. Name the product and the target group (e.g., 'Context: Customer Portal, residential customers').`,
+    };
   }
 
   const evidence = [
-    foundProduct.length > 0 ? `Product: ${foundProduct.slice(0, 2).join(", ")}` : null,
-    foundUser.length > 0 ? `User: ${foundUser.slice(0, 2).join(", ")}` : null,
+    `Product: ${foundProduct.slice(0, 2).join(", ")}`,
+    `User: ${foundUser.slice(0, 2).join(", ")}`,
     foundBusiness.length > 0 ? `Business: ${foundBusiness.slice(0, 2).join(", ")}` : null,
   ].filter(Boolean);
 
-  return { passed: true, evidence: `Context keywords found: ${evidence.join("; ")}` };
+  return { passed: true, evidence: `Context found: ${evidence.join("; ")}` };
 }
 
 /**
@@ -174,20 +173,27 @@ export function checkACPresence(body) {
   }
 
   if (totalAC < 2) {
-    return { passed: false, reason: `Only ${totalAC} acceptance criterion found; expected at least 2 (happy path + error case)` };
-  }
-
-  const hasHappyPath = /(successfully|happy path|normal case|standard flow)/i.test(body);
-  const hasErrorCase = /(error|fail|invalid|exception|edge case|boundary)/i.test(body);
-
-  if (!hasHappyPath || !hasErrorCase) {
+    // Without checklist, Gherkin or an AC section, the count comes only from words like "must"/"should".
+    const onlyModalWords = checklistItems.length === 0 && gherkinLines.length === 0 && !hasAcSection;
     return {
-      passed: true,
-      evidence: `${totalAC} acceptance criteria found, but consider adding ${!hasHappyPath ? "a happy path" : ""}${!hasHappyPath && !hasErrorCase ? " and " : ""}${!hasErrorCase ? "an error case" : ""}`,
+      passed: false,
+      reason: onlyModalWords
+        ? `No acceptance criteria found (only ${totalAC} "must/should" statement); expected at least 2 criteria (happy path + a negative, empty-state, or error case)`
+        : `Only ${totalAC} acceptance criterion found; expected at least 2 (happy path + a negative, empty-state, or error case)`,
     };
   }
 
-  return { passed: true, evidence: `${totalAC} acceptance criteria found (happy path + error case covered)` };
+  // A second scenario is only useful if it covers something that can go wrong:
+  // error, empty state, or authorization. Checked on the criteria text, not on the whole body.
+  const acLines = [...checklistItems, ...(body.match(/^\s*(?:Given|When|Then)\b.*$/gim) || [])];
+  const acText = acLines.length > 0 ? acLines.join("\n") : body;
+  const negativeCase = /\b(?:errors?|fail(?:s|ed|ure|ing)?|invalid|exceptions?|edge case|boundary|not\s+(?:signed|logged)\s+in|unauthori[sz]ed|forbidden|denied|empty|no\s+\w+|cannot|can't|expired|older\s+than|rejected|redirect(?:ed)?)\b/i;
+
+  if (!negativeCase.test(acText)) {
+    return { passed: false, reason: `${totalAC} acceptance criteria found, but none covers an error, empty-state, or authorization case` };
+  }
+
+  return { passed: true, evidence: `${totalAC} acceptance criteria found (incl. a negative, empty-state, or error case)` };
 }
 
 /**
@@ -241,7 +247,8 @@ export function checkTechnicalScope(body) {
     /-\s*(upgrade|migrate|implement|create|update|configure|refactor)/i,
   ];
 
-  const hasScopeSection = scopePatterns.some(pattern => pattern.test(body));
+  const hasScopeSection = getSection(body, ["what", "scope", "technical\\s+scope"]) !== null
+    || scopePatterns.some(pattern => pattern.test(body));
 
   if (!hasScopeSection) {
     return { passed: false, reason: "No clear technical scope section found. Add a 'What' or 'Scope' section with specific work items." };
@@ -279,7 +286,8 @@ export function checkJustification(body) {
     /\b(eol|end-of-life|security|compliance|performance|debt|deprecated)\b/i,
   ];
 
-  const hasJustification = justificationPatterns.some(pattern => pattern.test(body));
+  const hasJustification = getSection(body, ["why", "reason", "justification", "background", "motivation"]) !== null
+    || justificationPatterns.some(pattern => pattern.test(body));
 
   if (!hasJustification) {
     return { passed: false, reason: "No justification section found. Add a 'Why' section explaining the driver (e.g., EOL date, security requirement, performance need)." };
@@ -346,7 +354,8 @@ export function checkRollbackPlan(body) {
     return { passed: false, reason: "Body is empty" };
   }
 
-  const hasRollbackSection = /##?\s*rollback/i.test(body);
+  // Heading ("## Rollback Plan"), bold label ("**Rollback Plan:** …") or plain label ("Rollback: …")
+  const hasRollbackSection = getSection(body, ["rollback"]) !== null || /##?\s*rollback/i.test(body);
 
   if (!hasRollbackSection) {
     return { passed: false, reason: "No rollback plan section found. For production-impacting tasks, a tested rollback procedure is mandatory." };
@@ -420,7 +429,9 @@ export function checkExpectedVsActual(body) {
     /\binstead\s*(of|got)/i,
   ];
 
-  const hasExpectedVsActual = expectedPatterns.some(pattern => pattern.test(body));
+  // Heading ("## Expected"), bold label ("**Expected:** …") or plain label ("Expected: …")
+  const labelled = getSection(body, ["expected"]) !== null && getSection(body, ["actual"]) !== null;
+  const hasExpectedVsActual = labelled || expectedPatterns.some(pattern => pattern.test(body));
 
   if (!hasExpectedVsActual) {
     return { passed: false, reason: "No 'Expected vs. Actual' section found. Add clear description of expected behavior and actual behavior (e.g., 'Expected: PDF downloads. Actual: Error 500')." };
@@ -449,17 +460,19 @@ export function checkEnvironmentInfo(body) {
     /\b(browser|os|version|device|platform|ios|android|windows|mac|safari|chrome|firefox)\b/i,
   ];
 
-  const hasEnvironment = environmentPatterns.some(pattern => pattern.test(body));
+  const hasEnvironment = getSection(body, ["environment", "system\\s+info", "configuration"]) !== null
+    || environmentPatterns.some(pattern => pattern.test(body));
 
   if (!hasEnvironment) {
     return { passed: false, reason: "No environment information found. Add details about browser, OS, device, and version where the bug occurs." };
   }
 
+  // Named products count as details, not only the generic words ("Safari" is a browser, "iOS 17" is OS + version).
   const details = [];
-  if (/\bbrowser\b/i.test(body)) details.push("browser");
-  if (/\b(os|operating\s*system)\b/i.test(body)) details.push("OS");
-  if (/\bversion\b/i.test(body)) details.push("version");
-  if (/\b(device|mobile|ios|android)\b/i.test(body)) details.push("device/platform");
+  if (/\b(browser|safari|chrome|firefox|edge|opera)\b/i.test(body)) details.push("browser");
+  if (/\b(os|operating\s*system|ios|ipados|android|windows|macos|mac\s*os|linux|ubuntu)\b/i.test(body)) details.push("OS");
+  if (/\bversion\b|\b(?:ios|ipados|android|windows|macos|safari|chrome|firefox|edge|v)\s*\d+(?:\.\d+)*/i.test(body)) details.push("version");
+  if (/\b(device|mobile|iphone|ipad|pixel|galaxy|tablet|desktop|laptop)\b/i.test(body)) details.push("device");
 
   if (details.length < 2) {
     return { passed: false, reason: `Environment section exists but incomplete. Found: ${details.join(", ")}. Add at least 2-3 details (browser, OS, version, device).` };
@@ -480,32 +493,29 @@ export function checkGoalStatement(body) {
     return { passed: false, reason: "Body is empty" };
   }
 
-  const goalPatterns = [
-    /##?\s*(goal|objective|aim|purpose)/i,
-    /\bgoal\s*is\s*to\b/i,
-    /\bobjective\s*is\s*to\b/i,
-  ];
+  const section = getSection(body, ["goal", "objective", "aim", "purpose"]);
+  const inline = /\b(?:goal|objective)\s+is\s+to\b/i.test(body);
 
-  const hasGoal = goalPatterns.some(pattern => pattern.test(body));
-
-  if (!hasGoal) {
-    return { passed: false, reason: "No goal statement found. Add a 'Goal' section with a SMART objective (Specific, Measurable, Achievable, Relevant, Time-bound)." };
+  if (!section && !inline) {
+    return { passed: false, reason: "No goal statement found. Add a 'Goal' section describing the outcome the epic should achieve." };
   }
 
-  const hasSpecific = /\b(specific|clear|defined)\b/i.test(body);
-  const hasMeasurable = /\b(\d+\s*%|reduce|increase|within|by\s*Q\d|deadline)\b/i.test(body);
-  const hasTimebound = /\b(by\s*\d{4}|Q\d|deadline|target\s*date)\b/i.test(body);
-
-  const smartElements = [];
-  if (hasSpecific) smartElements.push("specific");
-  if (hasMeasurable) smartElements.push("measurable");
-  if (hasTimebound) smartElements.push("time-bound");
-
-  if (smartElements.length < 2) {
-    return { passed: false, reason: `Goal statement exists but lacks SMART criteria. Found: ${smartElements.join(", ")}. Add measurable target and/or deadline.` };
+  if (section !== null && wordCount(section) < 5) {
+    return { passed: false, reason: "Goal section is too short to state an outcome. Describe who should be able to achieve what." };
   }
 
-  return { passed: true, evidence: `SMART goal includes: ${smartElements.join(", ")}` };
+  // Structure is checked here; whether the goal is a real outcome is judged by the AI check (epic-goal).
+  const text = section ?? body;
+  const hints = [];
+  if (/\b\d+\s*(?:%|percent)|\b(?:reduce|increase|decrease|improve)\b/i.test(text)) hints.push("measurable");
+  if (/\bby\s+(?:Q[1-4]|\d{4})\b|\bdeadline\b|\btarget\s+date\b/i.test(text)) hints.push("time-bound");
+
+  return {
+    passed: true,
+    evidence: hints.length > 0
+      ? `Goal statement found (${hints.join(", ")})`
+      : "Goal statement found (no measurable target or deadline; judged by the AI check)",
+  };
 }
 
 /**
@@ -516,30 +526,27 @@ export function checkBenefitStatement(body) {
     return { passed: false, reason: "Body is empty" };
   }
 
-  const benefitPatterns = [
-    /##?\s*(benefit|value|impact|outcome)/i,
-    /\bbenefit\s*(is|will\s*be)\b/i,
-    /\bvalue\s*(is|will\s*be)\b/i,
-  ];
+  const section = getSection(body, ["benefit", "value", "impact", "outcome"]);
+  const inline = /\b(?:benefit|value)\s+(?:is|will\s+be)\b/i.test(body);
 
-  const hasBenefit = benefitPatterns.some(pattern => pattern.test(body));
-
-  if (!hasBenefit) {
-    return { passed: false, reason: "No benefit statement found. Add a 'Benefit' section quantifying who gains what (e.g., 'Customers save 10 minutes/month')." };
+  if (!section && !inline) {
+    return { passed: false, reason: "No benefit statement found. Add a 'Benefit' section stating who gains what." };
   }
 
-  const hasQuantified = /\b(\d+\s*(%|minutes?|hours?|tickets?|dollars?|€)|reduce|increase|save)\b/i.test(body);
-  const hasStakeholder = /\b(customer|user|support|team|business|revenue)\b/i.test(body);
-
-  if (!hasQuantified) {
-    return { passed: false, reason: "Benefit statement exists but lacks quantification. Add specific numbers (e.g., 'reduce support tickets by 30%')." };
+  if (section !== null && wordCount(section) < 5) {
+    return { passed: false, reason: "Benefit section is too short. State who gains what." };
   }
 
-  const details = [];
-  if (hasQuantified) details.push("quantified");
-  if (hasStakeholder) details.push("stakeholder identified");
+  // Structure is checked here; quality is judged by the AI check (epic-benefit).
+  const text = section ?? body;
+  const quantified = /\b\d+\s*(?:%|percent|minutes?|hours?|days?|tickets?|€|eur|dollars?)|\b(?:reduce|increase|decrease|save)\b/i.test(text);
 
-  return { passed: true, evidence: `Benefit statement is ${details.join(" + ")}` };
+  return {
+    passed: true,
+    evidence: quantified
+      ? "Benefit statement found (quantified)"
+      : "Benefit statement found (not quantified; judged by the AI check)",
+  };
 }
 
 /**
@@ -550,25 +557,69 @@ export function checkStoryList(body) {
     return { passed: false, reason: "Body is empty" };
   }
 
-  const storyListPatterns = [
-    /##?\s*(stories|child\s*stories|related\s*stories|scope)/i,
-    /#\d+/g,
-  ];
+  const refs = body.match(/#\d+/g) || [];
+  const section = getSection(body, [
+    "stories", "child\\s+stories", "candidate\\s+stories", "related\\s+stories", "slices", "candidate\\s+slices",
+  ]);
+  const items = section ? countBullets(section) : 0;
 
-  const hasStoryList = storyListPatterns.some(pattern => pattern.test(body));
-
-  if (!hasStoryList) {
-    return { passed: false, reason: "No story list found. Add a 'Stories' section listing child stories (e.g., '#2, #7, #11')." };
+  if (refs.length >= 2) {
+    return {
+      passed: true,
+      evidence: `${refs.length} child stories referenced: ${refs.slice(0, 5).join(", ")}${refs.length > 5 ? "..." : ""}`,
+    };
   }
 
-  const issueRefs = body.match(/#\d+/g) || [];
-
-  if (issueRefs.length === 0) {
-    return { passed: false, reason: "Story list section exists but no issue references found. Add links to child stories (e.g., '#2 Download invoice')." };
+  if (items >= 2) {
+    return { passed: true, evidence: `${items} candidate stories listed` };
   }
 
   return {
-    passed: true,
-    evidence: `${issueRefs.length} child story/stories referenced: ${issueRefs.slice(0, 5).join(", ")}${issueRefs.length > 5 ? "..." : ""}`,
+    passed: false,
+    reason: "No story list found. Add a 'Stories' section with at least two child stories or candidate slices (e.g., '#[number], #[number]').",
   };
 }
+
+
+// ---------------------------------------------------------------------------
+// Helpers: whole-word matching and label/heading detection
+// ---------------------------------------------------------------------------
+
+/** Words that appear as whole words (plural and German endings tolerated), e.g. "customers", "Kunden". */
+function findWords(body, words) {
+  return words.filter((word) =>
+    new RegExp(`\\b${word.replace(/\s+/g, "\\s+")}(?:s|n|en)?\\b`, "i").test(body)
+  );
+}
+
+const SECTION_BOUNDARY = /^\s*(?:#{1,6}\s|\*\*[^*\n]+\*\*)/;
+
+/**
+ * Returns the text of a section introduced by a heading ("## Goal"), a bold label ("**Goal:** …")
+ * or a plain label ("Goal: …"), up to the next heading or label. null if no such section exists.
+ */
+function getSection(body, names) {
+  const start = new RegExp(
+    `^\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?\\s*(?:${names.join("|")})s?\\b[^:\\n]*:?\\s*(?:\\*\\*)?\\s*(.*)$`,
+    "i"
+  );
+  const lines = body.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(start);
+    if (!match) continue;
+
+    const looksLikeLabel =
+      /^\s*#{1,6}\s*/.test(lines[i]) || /^\s*\*\*/.test(lines[i]) || /^\s*\w[\w\s-]*:/.test(lines[i]);
+    if (!looksLikeLabel) continue;
+
+    const content = [match[1]];
+    for (let j = i + 1; j < lines.length && !SECTION_BOUNDARY.test(lines[j]); j++) content.push(lines[j]);
+    return content.join("\n").trim();
+  }
+  return null;
+}
+
+const wordCount = (text) => text.split(/\s+/).filter(Boolean).length;
+const countBullets = (text) =>
+  text.split("\n").filter((line) => /^\s*(?:[-*•]|\d+[.)])\s+\S/.test(line)).length;

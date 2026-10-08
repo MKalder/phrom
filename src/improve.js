@@ -64,7 +64,7 @@ function findSection(body, names) {
     const hMatch = body.match(heading);
     if (hMatch && hMatch[1].trim()) return hMatch[1].trim();
 
-    const inline = new RegExp(`(?:^|\\n)\\**${name}\\**\\s*:\\s*([^\\n]+)`, "i");
+    const inline = new RegExp(`(?:^|\\n)\\s*\\**\\s*${name}\\s*\\**\\s*:\\s*\\**\\s*([^\\n]+)`, "i");
     const iMatch = body.match(inline);
     if (iMatch && iMatch[1].trim()) return iMatch[1].trim();
   }
@@ -125,49 +125,16 @@ function extractCurrent(body, checkName) {
 // ---------- Check Name to Template Key Mapping ----------
 
 /**
- * Maps check names (from agent.js/model.js) to template keys.
- * This is necessary because check names use CamelCase (e.g., goalStatement)
- * but templates use kebab-case (e.g., epic-goal).
+ * Maps check IDs to template keys. Check IDs are kebab-case and identical to the template keys,
+ * except for the three deterministic epic checks (see below).
  */
 const CHECK_TO_TEMPLATE_MAP = {
-  story: {
-    storyFormat: "story-format",
-    context: "story-context",
-    epicLink: "epic-link",
-    acPresence: "ac-presence",
-    storyLinks: "story-links",
-    acTestability: "ac-testability",
-    value: "business-value",
-  },
-
-  task: {
-    technicalScope: "technical-scope",
-    justification: "justification",
-    impactAnalysis: "impact-analysis",
-    rollbackPlan: "rollback-plan",
-    acPresence: "ac-presence",
-    acTestability: "ac-testability",
-    technicalFeasibility: "technical-feasibility",
-    rollbackRisk: "rollback-risk",
-  },
-
-  bug: {
-    reproductionSteps: "reproduction-steps",
-    expectedVsActual: "expected-vs-actual",
-    environmentInfo: "environment-info",
-    acPresence: "ac-presence",
-    acTestability: "ac-testability",
-    severity: "severity",
-    reproducibility: "reproducibility",
-  },
-
+  // Check IDs are kebab-case and identical to the template keys, except for the epic checks:
+  // the epic templates follow the finer-grained epic specification.
   epic: {
-    goalStatement: "epic-goal",
-    benefitStatement: "epic-benefit",
-    storyList: "epic-slicing",
-    acTestability: "epic-success-measure",
-    epicGoal: "epic-goal",
-    epicBenefit: "epic-benefit",
+    "goal-statement": "epic-goal",
+    "benefit-statement": "epic-benefit",
+    "story-list": "epic-slicing",
   },
 };
 
@@ -180,6 +147,28 @@ function mapCheckToTemplate(type, checkName) {
 // ---------- Templates ----------
 
 const NOT_FOUND = "(not present)";
+
+// A size-risk finding is not a missing section but a reason to split the item.
+const SIZE_RISK_TEMPLATES = {
+  story: {
+    suggestion: "Split the story into thinner vertical slices that each deliver one user outcome.",
+    after: `**Note:** This story may be too large for one sprint. Consider splitting it by [user role / capability / platform / happy path vs. error cases]:
+- [Slice 1: one user outcome]
+- [Slice 2: one user outcome]`,
+  },
+  epic: {
+    suggestion: "Split the epic by customer outcome or product domain.",
+    after: `**Note:** This epic may be too large. Consider splitting it by [customer outcome / product domain / platform] and list the resulting slices under "Child Stories / Candidate Slices".`,
+  },
+  task: {
+    suggestion: "Split the task by service, component or environment.",
+    after: `**Note:** This task may be too broad for one sprint. Consider splitting it by [service / component / environment], each with its own verification and rollback path.`,
+  },
+  bug: {
+    suggestion: "Separate independent defects and narrow the scope of the fix.",
+    after: `**Note:** This bug may be too broad for one sprint. Consider splitting it by [root cause / affected system / platform] and start with a time-boxed investigation spike.`,
+  },
+};
 
 function buildTemplates(refs) {
   const storyRef = refs.story?.story;
@@ -227,8 +216,8 @@ function buildTemplates(refs) {
         after: "Then the download starts within [x] seconds / Then the PDF contains [specific fields].",
       },
       "business-value": {
-        suggestion: "Describe the benefit concretely: who benefits and how do you measure success?",
-        after: "so that [user group] [concrete benefit], measurable by [metric].",
+        suggestion: "Describe the benefit concretely: who benefits, and what do they gain?",
+        after: "so that [user group] [concrete benefit].",
       },
     },
 
@@ -436,14 +425,17 @@ export function generateSuggestion(type, checkName, checkResult, issueBody) {
   const templateKey = mapCheckToTemplate(type, checkName);
 
   // Try template key first, then fall back to original checkName
-  const tpl = templates[type]?.[templateKey] || templates[type]?.[checkName];
+  const tpl =
+    templates[type]?.[templateKey] ||
+    templates[type]?.[checkName] ||
+    (checkName === "size-risk" ? SIZE_RISK_TEMPLATES[type] : undefined);
 
   const current = extractCurrent(issueBody, templateKey) || extractCurrent(issueBody, checkName);
   const reason = checkResult?.reason || checkResult?.message || "";
 
   if (!tpl) {
     return {
-      suggestion: reason ? `Fix: ${reason}` : `Revise the "${checkName}" section.`,
+      suggestion: reason || `Revise the "${checkName}" section.`,
       before: current || NOT_FOUND,
       after: `Add a section for "${checkName}" using the issue-type reference structure.`,
     };
@@ -608,6 +600,7 @@ export function generateImprovementReport(result, suggestions, revisedDraft = ''
   if (revisedDraft) {
     report += `## 📝 Revised Issue Draft\n\n`;
     report += `Below is a complete revised draft incorporating all suggestions:\n\n`;
+    report += `_This draft is a starting point. Replace the [placeholders] and verify every concrete value before you use it._\n\n`;
     report += `---\n\n`;
     report += revisedDraft;
     report += `\n\n---\n\n`;
@@ -619,7 +612,7 @@ export function generateImprovementReport(result, suggestions, revisedDraft = ''
   report += `3. Update the issue description with the recommended changes.\n`;
   report += `4. Re-run \`phrom improve ${result.issueNumber}\` to verify improvements.\n\n`;
   report += `---\n\n`;
-  report += `*Generated by Phrom Agent (Phase 2) – Improvement Suggestions*\n`;
+  report += `*Generated by Phrom – Improvement Suggestions*\n`;
 
   return report;
 }

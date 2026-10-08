@@ -1,14 +1,13 @@
 /**
- * agent.js – Phrom Agenten-Loop Phase 2 (criteria-based, all types).
+ * agent.js – Phrom assessment pipeline (fixed steps, all issue types).
  *
- * Reads issues from GitHub, runs deterministic + model checks based on criteria catalogs,
- * calculates type-specific score/status/summary, and saves with timestamp.
+ * Reads issues from GitHub, runs deterministic and AI checks based on the criteria catalogs,
+ * calculates score, Ready Gate, status and summary, and saves the results with a timestamp.
  *
- * Phase 2: Criteria-based assessment (Deterministic + AI Checks).
- * NO Improvement Suggestions here – those belong to cli.js (phrom improve).
- * 
- * NOTE: All check keys now use kebab-case to match criteria IDs.
- * ADDED: Central timing for deterministic and model checks.
+ * This is a fixed pipeline, not an agent: the model never chooses the next step.
+ * (The file name is kept for compatibility with existing imports.)
+ *
+ * No improvement suggestions here – those belong to cli.js (phrom improve).
  */
 
 import "dotenv/config";
@@ -36,12 +35,12 @@ import {
 } from "./checks.js";
 import { runModelChecks, inferType } from "./model.js";
 import { generateMarkdownReport, generateSummaryReport } from "./report.js";
-import { loadCriteria, getRequiredCriteria } from "./criteria-loader.js";
+import { loadCriteria } from "./criteria-loader.js";
 import { writeFileSync, mkdirSync } from "fs";
 import path from "path";
 
 /**
- * determineType(labels) – Determines type based on labels.
+ * determineType(labels) – Type from the type:* label, otherwise "unknown".
  */
 export function determineType(labels) {
   if (!labels || !Array.isArray(labels)) {
@@ -59,9 +58,7 @@ export function determineType(labels) {
 }
 
 /**
- * runDeterministicChecks(issue, type) – Type-specific deterministic checks.
- * 
- * NOTE: Keys now use kebab-case to match criteria IDs.
+ * runDeterministicChecks(issue, type) – Type-specific deterministic checks (keys = criterion IDs).
  */
 export function runDeterministicChecks(issue, type) {
   if (type === "story") {
@@ -106,82 +103,52 @@ export function runDeterministicChecks(issue, type) {
 }
 
 /**
- * calculateScore(issueResult, type) – Type-specific scoring.
- * 
- * NOTE: Updated to use kebab-case keys.
+ * evaluate(result, type) – Score and Ready Gate from the criteria catalog (references/criteria/*.json).
+ * Fail-closed: a criterion without a result counts as not passed.
  */
-export function calculateScore(issueResult, type) {
-  const { deterministicChecks, modelChecks } = issueResult;
+export function evaluate(result, type) {
+  const spec = loadCriteria(type);
+  if (!spec?.criteria) throw new Error(`No criteria found for type "${type}"`);
 
-  if (type === "story") {
-    let formalScore = 0;
-    if (deterministicChecks["story-format"]?.passed) formalScore += 10;
-    if (deterministicChecks["story-context"]?.passed) formalScore += 10;
-    if (deterministicChecks["epic-link"]?.passed) formalScore += 10;
-    if (deterministicChecks["ac-presence"]?.passed) formalScore += 10;
-    if (deterministicChecks["story-links"]?.passed) formalScore += 10;
+  let earned = 0, max = 0;
+  const failed = [], missing = [], results = [];
 
-    let contentScore = 0;
-    if (modelChecks["ac-testability"]?.passed) contentScore += 17;
-    if (modelChecks["size-risk"]?.size) contentScore += 17;
-    if (modelChecks["value"]?.passed) contentScore += 16;
+  for (const c of spec.criteria) {
+    if (c.implemented === false || !c.points) continue;
+    const source = c.check === "code" ? result.deterministicChecks : result.modelChecks;
+    const res = source?.[c.id];
+    max += c.points;
 
-    return Math.min(100, formalScore + contentScore);
+    const entry = { id: c.id, check: c.check, points: c.points, required: !!c.required, passed: false };
+    results.push(entry);
+
+    if (!res) {                      // fail-closed: no result = not passed
+      missing.push(c.id);
+      failed.push({ id: c.id, required: !!c.required });
+    } else if (res.passed) {
+      entry.passed = true;
+      earned += c.points;
+    } else {
+      failed.push({ id: c.id, required: !!c.required, reason: res.reason });
+    }
   }
 
-  if (type === "task") {
-    let formalScore = 0;
-    if (deterministicChecks["technical-scope"]?.passed) formalScore += 15;
-    if (deterministicChecks["justification"]?.passed) formalScore += 10;
-    if (deterministicChecks["impact-analysis"]?.passed) formalScore += 10;
-    if (deterministicChecks["rollback-plan"]?.passed) formalScore += 10;
-    if (deterministicChecks["ac-presence"]?.passed) formalScore += 5;
-
-    let contentScore = 0;
-    if (modelChecks["ac-testability"]?.passed) contentScore += 20;
-    if (modelChecks["size-risk"]?.size) contentScore += 15;
-    if (modelChecks["technical-feasibility"]?.passed) contentScore += 10;
-    if (modelChecks["rollback-risk"]?.passed) contentScore += 5;
-
-    return Math.min(100, formalScore + contentScore);
+  if (missing.length && !result.modelChecks?.error) {
+    console.warn(`  [criteria] no result for: ${missing.join(", ")}`);
   }
 
-  if (type === "bug") {
-    let formalScore = 0;
-    if (deterministicChecks["reproduction-steps"]?.passed) formalScore += 15;
-    if (deterministicChecks["expected-vs-actual"]?.passed) formalScore += 15;
-    if (deterministicChecks["environment-info"]?.passed) formalScore += 10;
-    if (deterministicChecks["ac-presence"]?.passed) formalScore += 10;
-
-    let contentScore = 0;
-    if (modelChecks["ac-testability"]?.passed) contentScore += 20;
-    if (modelChecks["size-risk"]?.size) contentScore += 15;
-    if (modelChecks["severity"]?.passed) contentScore += 10;
-    if (modelChecks["reproducibility"]?.passed) contentScore += 10;
-
-    return Math.min(100, formalScore + contentScore);
-  }
-
-  if (type === "epic") {
-    let formalScore = 0;
-    if (deterministicChecks["goal-statement"]?.passed) formalScore += 15;
-    if (deterministicChecks["benefit-statement"]?.passed) formalScore += 15;
-    if (deterministicChecks["story-list"]?.passed) formalScore += 10;
-
-    let contentScore = 0;
-    if (modelChecks["ac-testability"]?.passed) contentScore += 17;
-    if (modelChecks["size-risk"]?.size) contentScore += 17;
-    if (modelChecks["epic-goal"]?.passed) contentScore += 8;
-    if (modelChecks["epic-benefit"]?.passed) contentScore += 8;
-
-    return Math.min(100, formalScore + contentScore);
-  }
-  // Fallback for "unknown"
-  return 0;
+  return {
+    score: max ? Math.round((earned / max) * 100) : 0,
+    earned, max, failed, missing, results,
+    gateFailed: failed.some((f) => f.required),
+  };
 }
 
+export const calculateScore = (result, type) => evaluate(result, type).score;
+export const checkReadyGate = (result, type) => evaluate(result, type).gateFailed;
+
 /**
- * calculateStatus(score, hasFailedRequired) – Ampel-Status with ready gate.
+ * calculateStatus(score, hasFailedRequired) – Traffic-light status; the Ready Gate overrides the score.
  */
 export function calculateStatus(score, hasFailedRequired = false) {
   if (hasFailedRequired) {
@@ -193,86 +160,59 @@ export function calculateStatus(score, hasFailedRequired = false) {
   return { status: "not-ready", emoji: "🔴" };
 }
 
+/** Short wording for the summary line, per criterion ID. */
+const SUMMARY_PHRASES = {
+  "story-format": "no story format",
+  "story-context": "no context (product and target group)",
+  "epic-link": "no epic link",
+  "ac-presence": "acceptance criteria incomplete",
+  "story-links": "no story links",
+  "ac-testability": "AC not testable",
+  "business-value": "value unclear",
+  "size-risk": "too large for one sprint",
+  "goal-statement": "no goal statement",
+  "benefit-statement": "no benefit statement",
+  "story-list": "no child stories listed",
+  "epic-goal": "epic goal unclear",
+  "epic-benefit": "epic benefit unclear",
+  "technical-scope": "unclear technical scope",
+  "justification": "missing justification",
+  "impact-analysis": "missing impact analysis",
+  "rollback-plan": "missing rollback plan",
+  "technical-feasibility": "technical feasibility unclear",
+  "rollback-risk": "rollback risk too high",
+  "reproduction-steps": "no reproduction steps",
+  "expected-vs-actual": "expected vs. actual missing",
+  "environment-info": "environment info missing",
+  "severity": "severity not justified",
+  "reproducibility": "reproducibility unclear",
+};
+
 /**
- * generateSummary(issueResult, type) – Type-specific summary.
- * 
- * NOTE: Updated to use kebab-case keys.
+ * generateSummary(issueResult) – Short summary line, required criteria first.
  */
-export function generateSummary(issueResult, type) {
-  const { issueNumber, deterministicChecks, modelChecks } = issueResult;
-  const failedChecks = [];
+export function generateSummary(issueResult) {
+  const { issueNumber, evaluation } = issueResult;
 
-  if (type === "story") {
-    if (!deterministicChecks["story-format"]?.passed) failedChecks.push("no story format");
-    if (!deterministicChecks["story-context"]?.passed) failedChecks.push("no context");
-    if (!deterministicChecks["epic-link"]?.passed) failedChecks.push("no epic link");
-    if (!deterministicChecks["ac-presence"]?.passed) failedChecks.push("no AC");
-    if (modelChecks["business-value"]?.passed === false) failedChecks.push("value unclear");
-  } else if (type === "task") {
-    if (!deterministicChecks["technical-scope"]?.passed) failedChecks.push("unclear technical scope");
-    if (!deterministicChecks["justification"]?.passed) failedChecks.push("missing justification");
-    if (!deterministicChecks["impact-analysis"]?.passed) failedChecks.push("missing impact analysis");
-    if (!deterministicChecks["rollback-plan"]?.passed) failedChecks.push("missing rollback plan");
-  } else if (type === "bug") {
-    if (!deterministicChecks["reproduction-steps"]?.passed) failedChecks.push("no reproduction steps");
-    if (!deterministicChecks["expected-vs-actual"]?.passed) failedChecks.push("expected vs. actual missing");
-    if (!deterministicChecks["environment-info"]?.passed) failedChecks.push("environment info missing");
-  } else if (type === "epic") {
-    if (!deterministicChecks["goal-statement"]?.passed) failedChecks.push("no clear epic goal");
-    if (!deterministicChecks["benefit-statement"]?.passed) failedChecks.push("no quantified benefit");
-    if (!deterministicChecks["story-list"]?.passed) failedChecks.push("no child stories listed");
-
-    if (modelChecks["ac-testability"]?.passed === false) failedChecks.push("AC not testable");
-    if (type === "epic" && modelChecks["epic-goal"]?.passed === false) failedChecks.push("epic goal unclear");
-    if (type === "epic" && modelChecks["epic-benefit"]?.passed === false) failedChecks.push("epic benefit unclear");
+  if (!evaluation) {
+    return `Issue #${issueNumber}: no evaluation available.`;
   }
 
-  if (failedChecks.length === 0) {
+  // Required criteria first: they decide the status.
+  const failed = [...evaluation.failed].sort((a, b) => Number(b.required) - Number(a.required));
+
+  if (failed.length === 0) {
     return `Issue #${issueNumber} is ready for refinement. All checks passed.`;
   }
 
-  const firstThree = failedChecks.slice(0, 3).join(", ");
-  const moreText = failedChecks.length > 3 ? ` And ${failedChecks.length - 3} more points.` : "";
+  const phrases = failed.map((f) => SUMMARY_PHRASES[f.id] ?? f.id.replace(/-/g, " "));
+  const firstThree = phrases.slice(0, 3).join(", ");
+  const moreText = phrases.length > 3 ? ` And ${phrases.length - 3} more points.` : "";
   return `Issue #${issueNumber}: ${firstThree}.${moreText}`;
 }
 
 /**
- * checkReadyGate(result, type) – Checks if any required criterion failed.
- * 
- * NOTE: Now uses criterion.id directly (kebab-case) without replace().
- */
-export function checkReadyGate(result, type) {
-  const criteria = loadCriteria(type);
-  if (!criteria || !criteria.criteria) return false;
-
-  const requiredCriteria = criteria.criteria.filter((c) => c.required);
-
-  // Check deterministic
-  for (const criterion of requiredCriteria) {
-    if (criterion.check === "code") {
-      const checkResult = result.deterministicChecks[criterion.id];
-      if (checkResult && !checkResult.passed) {
-        return true; // Failed required criterion
-      }
-    }
-  }
-
-  // Check model
-  for (const criterion of requiredCriteria) {
-    if (criterion.check === "model") {
-      const checkResult = result.modelChecks[criterion.id];
-      if (checkResult && !checkResult.passed) {
-        return true; // Failed required criterion
-      }
-    }
-  }
-
-  return false; // All required criteria passed
-}
-
-/**
- * processIssue(issue) – Verarbeitet ein einzelnes Issue.
- * ADDED: Central timing for deterministic and model checks.
+ * processIssue(issue) – Assesses a single issue (with timing for deterministic and AI checks).
  */
 export async function processIssue(issue) {
   let type = determineType(issue.labels);
@@ -317,23 +257,24 @@ export async function processIssue(issue) {
     timestamp: new Date().toISOString(),
   };
 
-  result.score = calculateScore(result, type);
+  // Score, Ready Gate and status come from evaluate() (source: references/criteria/*.json)
+  const evaluation = evaluate(result, type);
+  result.evaluation = evaluation;
+  result.score = evaluation.score;
 
-  // Check ready gate
-  const hasFailedRequired = checkReadyGate(result, type);
-  const statusInfo = calculateStatus(result.score, hasFailedRequired);
+  const statusInfo = calculateStatus(evaluation.score, evaluation.gateFailed);
   result.status = statusInfo.status;
   result.emoji = statusInfo.emoji;
-  result.summary = generateSummary(result, type);
+  result.summary = generateSummary(result);
 
   return result;
 }
 
 /**
- * runAgent() – Hauptfunktion.
+ * runPipeline() – Assesses all open issues and writes reports, summary and JSON results.
  */
-export async function runAgent() {
-  console.log("Starting Phrom agent (Phase 2: criteria-based assessment)...\n");
+export async function runPipeline() {
+  console.log("Assessing issues (rules + AI checks)...\n");
 
   const issues = await listIssues();
   console.log(`Found ${issues.length} issues to process.\n`);
@@ -394,29 +335,12 @@ export async function runAgent() {
   return results;
 }
 
-/**
- * generateSummaryReport(results, timestamp) – Erstellt Summary-Report.
- * (Re-export from report.js for convenience if needed)
- */
+/** Re-export from report.js for convenience. */
 export { generateSummaryReport };
 
-/**
- * main() – Entry Point (nur wenn agent.js direkt gestartet wird).
- *
- * IMPORTANT: NO IMPROVEMENT GENERATION HERE.
- * Improvements are only generated via cli.js (phrom improve).
- */
-async function main() {
-  await runAgent();
-
-  // Only execute if agent.js is run directly (not imported)
-  if (import.meta.url === `file://${process.argv[1]}`) {
-    // runAgent() already handles all output and saving
-  }
-}
-
+/** Entry point when agent.js is started directly (no improvement generation here). */
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
+  runPipeline().catch((error) => {
     console.error("❌ Error:", error.message);
     process.exitCode = 1;
   });
