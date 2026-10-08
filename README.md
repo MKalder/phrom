@@ -1,135 +1,616 @@
 # Phrom (พร้อม)
 
-**An AI agent to prepare GitHub issues for backlog refinement.**
+**A read-only CLI that checks GitHub issues before backlog refinement and creates improvement suggestions for the Product Owner to review.**
 
-> Project status: Concept / planned MVP. The workflows described below are target behavior, not already implemented features.
+**Phrom** (พร้อม, Thai for "ready") is meant to take formal preparation work off Product Owners. It checks issues against a transparent, versioned rule set, assesses whether an item meets the criteria for refinement (`phrom run`), and creates an improvement draft on request (`phrom improve`). AI checks run via [Ollama](https://ollama.com) on a host you configure; in the default configuration, this is the same machine Phrom runs on, and backlog content is not sent to an LLM provider. The analysis never changes GitHub issues: the Product Owner reviews every suggestion and applies it manually.
 
-## Table of Contents
+> **Status:** MVP, version 1.0.0, rule set 0.3.1. The described features are implemented. The rule-based checks were evaluated offline against a test set of 18 issues; the AI checks were compared with the expectations of the same test set. All numbers come from the test day of 2026-10-08; on that day, the seed evaluation and `phrom run` against the demo repository produce identical results. This is not an independent measurement. **Whether Phrom is useful to Product Owners in real day-to-day work has not yet been studied**, see [Validation status](#validation-status). Known gaps are listed under [Limitations and roadmap](#limitations-and-roadmap).
 
-- [Problem and Goal](#problem-and-goal)
-- [Product Vision](#product-vision)
-- [What This Project Demonstrates](#what-this-project-demonstrates)
-- [Target Audience](#target-audience)
-- [Planned MVP](#planned-mvp)
-- [Planned Architecture](#planned-architecture)
-- [Rule Set and Safety Boundaries](#rule-set-and-safety-boundaries)
-- [Fault Tolerance and Review](#fault-tolerance-and-review)
-- [Planned Success Criteria](#planned-success-criteria)
-- [Open Questions](#open-questions)
+<img src="docs/phrom-demo.gif" alt="Phrom demo: rule-based backlog pre-check, AI analysis and an improvement draft" width="600">
 
-## Problem and Goal
+## Table of contents
 
-Unclear stories, missing or non-testable acceptance criteria, and possible duplicates consume time in refinement. Phrom is designed to analyze selected issues in advance and provide evidenced improvement proposals. **"Ready for discussion in refinement" is not the same as "ready for sprint planning".** Whether an item is sufficiently understood, sensibly sliced, and feasible is a joint decision by the product owner and the team.
+- [Example](#example)
+- [Quick Start](#quick-start)
+- [CLI commands](#cli-commands)
+- [How Phrom evaluates issues](#how-phrom-evaluates-issues)
+- [Architecture](#architecture)
+- [Privacy and security](#privacy-and-security)
+- [Persistence and review](#persistence-and-review)
+- [Quality measurement](#quality-measurement)
+- [Validation status](#validation-status)
+- [Limitations and roadmap](#limitations-and-roadmap)
+- [Background: problem, vision and target audience](#background-problem-vision-and-target-audience)
+- [License](#license)
 
-The background: The biggest wastes in refinement fall into four groups: poorly prepared items, the wrong level of detail at the wrong time, an overloaded backlog, and a poorly run session. Important for Phrom: only the first group is intended to be addressed by the agent.
+---
 
-## Product Vision
+## Example
 
-Backlog refinement should spend time on what only a team can do: build shared understanding, estimate, and decide on the technical approach. Today, part of that time is lost to work that could be done beforehand: unclear wording, missing acceptance criteria, oversized items, and duplicate entries.
+Issue #3 "Improve login" in the demo repository consists of a single sentence: `The login should be better.`
 
-**Phrom** (พร้อม, Thai for "ready") is an AI agent that takes this preparatory work off product owners' plates. It checks selected GitHub issues against a transparent rule set and delivers evidenced improvement proposals. The product owner keeps every decision: nothing is changed in GitHub without their explicit approval.
+**Phrom evaluation** (`phrom run`, 2026-10-08): 🔴 Not ready · 10/100, seven failed criteria.
 
-The vision behind the project is an agent that automates craft but does not replace judgment. Phrom does not prioritize, does not estimate, and does not assess technical feasibility. It ensures that items enter refinement in a better state, so the team starts where the discussion that truly needs team time begins.
+| Criterion        | Type | Result                                                               |
+| ---------------- | ---- | -------------------------------------------------------------------- |
+| `story-format`   | Rule | ❌ No story format found                                             |
+| `story-context`  | Rule | ❌ Neither product nor target audience named                         |
+| `epic-link`      | Rule | ❌ No epic reference                                                 |
+| `ac-presence`    | Rule | ❌ No acceptance criteria (the rule only finds a "should" statement) |
+| `story-links`    | Rule | ✅ Always passes for a non-empty body                                |
+| `ac-testability` | AI   | ❌ Criteria vague and not measurable ("should be better")            |
+| `size-risk`      | AI   | ❌ Rated XL: too broad, no clear boundaries                          |
+| `business-value` | AI   | ❌ No clear user, need or benefit                                    |
 
-Phrom is also a demonstration project: it shows how to build an agent with clear tools, a traceable loop, durably stored results, and human approval—without a framework and without cloud dependency for model execution.
+**After:** an excerpt from the generated improvement suggestion, copied unchanged from `output/improvement-suggestions/issue-3-improvements-2026-10-08T05-51-15-808Z.md` (generated by `npm run demo`). The Product Owner must review it before any part of it is used.
 
-## What This Project Demonstrates
+```markdown
+## Story
 
-Phrom shows how a product owner translates a real process problem—avoidable preparatory work in backlog refinement—into a controllable AI agent. The project demonstrates:
+As a [role], I want to [specific login action or improvement], so that [concrete benefit].
 
-- **Product work:** from problem analysis through target audience, scope and MVP to measurable success criteria.
-- **Agent architecture:** an agent loop with limited tools, stored intermediate results, and resumption after failures.
-- **Human control:** the model proposes; every change to an issue requires explicit approval by the product owner.
-- **Reasoned decisions:** architectural decisions are documented as ADRs; model quality is measured against a test set.
+## Acceptance Criteria
 
-Phrom does not show that AI replaces product owners. Prioritization, estimation, and feasibility remain with the team. Outsourcing the team's thinking process is not desirable.
+**Happy Path**
 
-## Target Audience
+- [ ] Given I am on the login page and have valid credentials, when I enter my username and password and click "Sign in", then I am redirected to my dashboard within 2 seconds.
 
-### Primary: Product Owners
+**Error Cases**
 
-Phrom is aimed at product owners who:
-
-- maintain (or could maintain) a backlog in GitHub issues,
-- have to sharpen many items before each refinement without a dedicated tooling budget,
-- value data control and do not want to hand backlog content to a cloud service,
-- want to review and approve proposals rather than receive automatic changes.
-
-Typical context: a Scrum team, a backlog with a few dozen open items, and a refinement that regularly starts with wording questions instead of substantive questions and decisions.
-
-### Secondary: Domain and Technical Observers
-
-As a public demonstration project, Phrom also appeals to:
-
-- **Tech leads and engineering managers** who want to assess how an agent with tool access, error handling, and an approval step can be built,
-- **Recruiters and hiring managers** who want to understand product and architecture competence through an end-to-end example, from vision through decisions to implementation.
-
-### Not the Target Audience
-
-Phrom is not intended for:
-
-- teams that want to automate prioritization, estimation, or sprint planning,
-- organizations with a large backlog of hundreds of items across multiple teams,
-- users who want changes without human review.
-
-### Usage Assumptions
-
-These assumptions apply to the MVP and will be validated in the project:
-
-- The backlog lives in GitHub issues, not in another tool.
-- Items carry exactly one type label (Epic, Story, Task, or Bug).
-- The team accepts a shared rule set for pre-checks.
-- A locally run model is qualitatively sufficient for the task. This is a hypothesis, not a result, and will be measured with a test set.
-
-## Planned MVP
-
-- A PO starts a check for specific issue numbers or for all supported issues in the demo repository that are not yet marked as `refinement-ready`.
-- Phrom reads the selected issues via the GitHub API, determines their type based on exactly one `type:*` label, and checks them against a versioned, project-specific rule set. If a type is missing or ambiguous, the item is not processed silently but flagged with a diagnosis.
-- The focus is on user stories: clarity of role, goal, and benefit; presence of observable, testable acceptance criteria; unclear wording; possible oversizing and content overlaps. For epics, goal and possible slicing are assessed as a basis for discussion. Tasks and bugs are not assessed for content in the first MVP, but transparently marked as out of scope.
-- A Node.js orchestrator processes items one by one and persistently stores snapshot, findings, proposal, and status in PostgreSQL **after each item**. Results are shown to the PO for review in aggregate when all selected items are completed or have a declared error state.
-- The PO can accept a proposal, reject it, or request a re-check with a hint. The application may only change GitHub after explicit acceptance; the model receives no tool to overwrite issues on its own.
-
-A run is considered complete even if individual items have failed after limited retries: the PO sees a complete overview of successful, skipped, and failed items, not the appearance of a fully successful check.
-
-## Planned Architecture
-
-```text
-PO → Node.js CLI / Orchestrator → GitHub REST API → Issues in phrom-backlog-demo
-                   │
-                   ├─ Ollama on local VPS (CPU-only, model to be selected)
-                   ├─ versioned rule set + deterministic checks
-                   └─ PostgreSQL: runs, issue snapshots, findings, proposals,
-                                  error states and PO decisions
-
-PO review → explicit approval → Node.js application → update GitHub issue
+- [ ] Given I enter an incorrect password, when I click "Sign in", then I see a clear error message stating "Invalid credentials. Please try again." and the login form remains visible.
+- [ ] Given I am on the login page and have no internet connection, when I attempt to sign in, then I see a network error message and the form is disabled.
 ```
 
-- `phrom` will eventually contain agent code, rules, tests, and architectural decisions.
-- `phrom-backlog-demo` contains real GitHub issues as a demo backlog; a public GitHub Project can display them as a board. Project drafts are **not** repository issues accessible via the planned issues REST integration.
-- GitHub is the source of truth for backlog content; PostgreSQL holds check and review state. There is no second, manually maintained copy of the backlog.
-- The agent loop selects read/check steps within defined bounds, observes tool results, and generates a proposal. The question of whether model tool calling or more deterministic orchestration is more reliable for the first cut will be tested in the prototype.
+Missing information such as role, benefit and context appears as placeholders in square brackets. Issue numbers, percentages, ISO dates and quarters that do not appear in the original issue are automatically replaced with placeholders. **Other details are not caught.** In this draft, the model invented the response time "within 2 seconds", the message text "Invalid credentials. Please try again." and the criterion about the missing internet connection. The time value slips through because the filter does not recognize time units. Also, the draft contains no note on splitting the item, even though `size-risk` rates it as XL. The draft is a starting point, not a result.
 
-## Rule Set and Safety Boundaries
+---
 
-The concrete rule set will be defined **before** implementation, with examples and expected findings. Formal criteria can be checked in code; semantic questions are supplied by the model as a reasoned assessment, not as fact. A supposedly "too large" item cannot be reliably fixed to sprint size from text alone.
+## Quick Start
 
-Phrom does not prioritize by business value, does not estimate for the team, does not confirm technical feasibility, and does not declare an item sprint-ready on its own. In particular, a mere `refinement-ready` label must not be an automatic consequence of a model answer: assigning it is a separate PO decision yet to be defined.
+### Prerequisites
 
-For GitHub, a fine-grained personal access token with access only to the demo repository is intended. Secrets remain outside the repository. Analysis and GitHub write access are separated. Before acceptance, the stored issue snapshot is checked against the current issue state so that intervening changes are not overwritten. Repeated calls must not create duplicate changes.
+- Node.js ≥ 22 and npm ≥ 10
+- [Ollama](https://ollama.com) with [`qwen3:30b-instruct`](https://ollama.com/library/qwen3:30b-instruct). The documented test system used Ollama 0.22.1.
+- Memory for the model: about 19 GB (quantization Q4_K_M, 18 GB on disk). See [Run times](#run-times) for the test system.
 
-## Fault Tolerance and Review
+### 1. Install Ollama
 
-Each started run records the selected issue numbers and, per item, a state such as `pending`, `running`, `done`, `skipped`, or `failed`. After a crash, the application should not recompute finished items and should deliberately resume hanging items. Errors and retries are limited and logged. The exact state machine and transaction boundaries are still to be specified.
+```bash
+# Install Ollama (Linux/macOS)
+curl -fsSL https://ollama.com/install.sh | sh
 
-In the review, the PO sees per item: original content, finding with evidence, proposed change, and uncertainties. "Re-check" creates a traceable new attempt and does not silently replace the previous decision.
+# Download the model
+ollama pull qwen3:30b-instruct
 
-## Planned Success Criteria
+# Test the installation
+ollama run qwen3:30b-instruct "Hello! What does phrom in thai mean and by the way I will use you as a LLM for phrom the Backlog Refinement MVP. Do you think you can be useful?"
+```
 
-- Findings match a previously defined demo test set; false alarms on good control issues remain visible.
-- No data loss when a run aborts late; resumption processes only open items.
-- No GitHub change without explicit PO approval.
-- Duration per item and per run, error rate, and acceptance/rejection rate are measurable.
+An example response is in [docs/qwen3/output.md](docs/qwen3/output.md). The model's response varies from run to run.
 
-## Open Questions
+On Linux, Ollama usually runs as a system service after installation. Only start `ollama serve` if the service is not running.
 
-Model and thinking mode, concrete check criteria per type, CLI review design, database schema, retry strategy, handling of multiple labels, and the scope of the epic check will be decided only after a small test set. This README describes the target picture; a quick start will follow once the implementation is actually executable.
+### 2. Install Phrom
+
+```bash
+git clone https://github.com/MKalder/phrom.git
+cd phrom
+npm install
+```
+
+Run all commands from the repository root: criteria and reference files are loaded relative to the working directory.
+
+### Option A: Demo (read-only)
+
+The fastest way to see Phrom in action. The demo connects to a public demo repository and does not change anything there.
+
+```bash
+cp .env.example .env
+```
+
+Values for the demo in `.env`:
+
+```bash
+GITHUB_OWNER=MKalder
+GITHUB_REPO=phrom-backlog-demo
+OLLAMA_HOST=http://localhost:11434
+MODEL_NAME=qwen3:30b-instruct
+
+#GITHUB_TOKEN=github_pat_your_token_here
+```
+
+```bash
+npm run demo
+```
+
+The demo:
+
+1. checks environment, GitHub, Ollama and model (preflight),
+2. runs the formal pre-check (`phrom status`) over the backlog and shows how many issues pass all formal checks,
+3. analyzes two stories with AI (two calls to `phrom select`): the one with the most formal gaps and the formally best one,
+4. creates an improvement draft for the first one (`phrom improve n1`) and shows it as **Before → After**.
+
+Options (with npm, put `--` before the flags):
+
+| Option           | Effect                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `--verbose`      | Show preflight details even on success                                                  |
+| `--full`         | Also show draft sections that contain only placeholders                                 |
+| `--showcase=<n>` | Use a different issue for the before/after example, e.g. `npm run demo -- --showcase=5` |
+
+### Note: GitHub API limit
+
+GitHub limits the number of API requests. For the public demo, this can matter especially when there are several testers.
+
+| Access                    |               Limit |
+| ------------------------- | ------------------: |
+| Public, unauthenticated   | 60 requests/hour/IP |
+| Authenticated (PAT/OAuth) | 5,000 requests/hour |
+
+A demo run needs about 25 requests. Without authentication, the limit is therefore reached quickly. In this case, you see for example:
+
+```text
+✖ GitHub API rate limit exceeded for <IP>
+(But here's the good news: Authenticated requests get a higher rate limit.)
+```
+
+A token in `GITHUB_TOKEN` raises the limit. Logging in with `gh auth login` is not enough, because the analysis does not use the GitHub CLI.
+
+### Option B: Your own backlog
+
+1. **Create a repository with issues.** Each item gets exactly one type label: `type:epic`, `type:story`, `type:task` or `type:bug`. If the label is missing, the model determines the type (in `run`, `select` and `improve`). In the test run on October 8, an issue without a label (#19) was classified as a task and evaluated. This shows that the path works, not that the classification is reliable: type detection has not been evaluated. So assign the labels yourself.
+2. **Create a token for the analysis.** Use a fine-grained personal access token that is restricted to this one repository and has _Issues: Read-only_. The analysis needs no write permissions. Only the optional seeding of the demo issues (`npm run seed`, step 4) writes, and it does so with a separate login; see [Privacy and security](#privacy-and-security). For a public repository, no token is needed; only the lower API limit applies.
+3. **Configure `.env`:**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   ```bash
+   GITHUB_TOKEN=github_pat_read_only_token
+   GITHUB_OWNER=your-username
+   GITHUB_REPO=my-backlog
+
+   OLLAMA_HOST=http://localhost:11434
+   MODEL_NAME=qwen3:30b-instruct
+   ```
+
+4. **Optional: seed the demo backlog into your repository.** Seeding is a write operation. It runs via the GitHub CLI with a separate login and never uses `GITHUB_TOKEN`:
+
+   ```bash
+   gh auth login
+   node seed/labels.js
+   npm run seed
+   ```
+
+5. **Start:** Run `npm run phrom status` for a formal overview, then `npm run phrom improve <n>` for a specific issue.
+
+---
+
+## CLI commands
+
+| Command                | Purpose                                                          | Improvements | Duration                 |
+| ---------------------- | ---------------------------------------------------------------- | ------------ | ------------------------ |
+| `phrom run`            | Evaluate **all** open issues                                     | ❌ No        | Long (issues × AI calls) |
+| `phrom improve <n...>` | Evaluate **selected** issues and create improvement drafts       | ✅ Yes       | Medium to long           |
+| `phrom select <n...>`  | Evaluate **selected** issues                                     | ❌ No        | Medium                   |
+| `phrom filter <type>`  | Evaluate issues of one **type** (`epic`, `story`, `task`, `bug`) | ❌ No        | Medium                   |
+| `phrom status`         | **Formal pre-check** (deterministic checks only)                 | ❌ No        | Seconds                  |
+| `phrom list`           | Only **list** issues                                             | ❌ No        | Seconds                  |
+
+> **`phrom status` is not a readiness verdict.** The command runs only the deterministic checks and outputs the share of passed checks as a value from 0–50 in three ranges: 🟢 at least 80%, 🟡 50–79%, 🔴 below 50%. It knows neither AI criteria nor point weights nor the Ready Gate, and it also reports how many issues pass _all_ formal checks. Only `run`, `select`, `filter` and `improve` deliver the evaluation.
+
+### Run times
+
+Measured on 2026-10-08 on the documented test system (the hardware was not recorded again that day): Linux server with AMD EPYC 7543P (8 vCPUs), 31 GiB RAM **without GPU**. `qwen3:30b-instruct` is a mixture-of-experts model (`qwen3moe`, 30.5 billion parameters, Q4_K_M). The times depend heavily on the hardware.
+
+| Action                                             | Measured                                                |
+| -------------------------------------------------- | ------------------------------------------------------- |
+| Rule-based checks per issue                        | < 5 ms (max. 4.1 ms)                                    |
+| AI checks per issue                                | 25–55 s (mean 38 s)                                     |
+| `phrom run`, 19 issues                             | just over 12 min (729 s)                                |
+| `phrom improve` for one story (evaluation + draft) | about 2.5 min                                           |
+| `npm run demo`                                     | just over 3.5 min (pre-check 6.5 s, AI and draft 205 s) |
+
+### Examples
+
+Issue numbers refer to the demo repository and can change after a reset.
+
+```bash
+npm run phrom run              # evaluate all issues (without improvements)
+npm run phrom improve 3        # evaluate and improve one issue
+npm run phrom improve 3 7 5    # improve several issues
+npm run phrom select 3 7 5     # evaluate several issues (without improvements)
+npm run phrom filter story     # evaluate all stories
+npm run phrom status           # formal pre-check
+npm run phrom list             # only list issues
+```
+
+### Output files
+
+| Command   | Files in `output/`                                                                                         |
+| --------- | ---------------------------------------------------------------------------------------------------------- |
+| `run`     | `reports/issue-N-report-*.md`, `summary-*.md`, `results-*.json`                                            |
+| `improve` | `reports/issue-N-report-*.md`, `improvement-suggestions/issue-N-improvements-*.md`, `summary-improve-*.md` |
+| `select`  | `reports/issue-N-report-*.md`, `summary-select-*.md`                                                       |
+| `filter`  | `reports/issue-N-report-*.md`, `summary-filter-<type>-*.md`                                                |
+| `status`  | None (console only)                                                                                        |
+| `list`    | None (console only)                                                                                        |
+
+---
+
+## How Phrom evaluates issues
+
+Phrom evaluates each issue on **two levels**. The complete rule set (version 0.3.1) is versioned in the repository; see [Rule set in detail](docs/RULES.en.md).
+
+1. **Score (0–100):** points achieved relative to achievable points.
+2. **Ready Gate:** every criterion marked as `required` must pass.
+
+The type of an issue (`story`, `epic`, `task`, `bug`) determines which criteria apply.
+
+| Status        | Condition                             |
+| ------------- | ------------------------------------- |
+| 🟢 Ready      | Ready Gate passed **and** score ≥ 80  |
+| 🟡 Needs work | Ready Gate passed **and** score 50–79 |
+| 🔴 Not ready  | Ready Gate failed **or** score < 50   |
+
+**The Ready Gate overrides the score.** Example from the demo repository: issue #4 "Reset password" reaches 80/100 points and is still 🔴 Not ready, because the required information on product and target audience (`story-context`) is missing. Points and required flags are defined per criterion in `references/criteria/*.json` and can be adjusted there.
+
+> **In the current rule set, 🟡 only occurs for stories.** For task, bug and epic, the required criteria make up 81–100% of the points. A passed gate therefore always means a score of at least 80: the result is effectively 🟢 or 🔴. [Rules › When is 🟡 reachable?](docs/RULES.en.md#score-and-ready-gate)
+
+### Two kinds of criteria
+
+- **Deterministic (rule):** checked in code, in milliseconds and reproducibly. Examples: story format, epic link and number of acceptance criteria.
+- **AI:** The model provides a reasoned assessment of semantic questions, such as whether acceptance criteria are measurable. This is an assessment, not a fact. Reports and drafts mark each criterion as `(deterministic)` or `(ai)`.
+
+### Example: story (100 points)
+
+| Criterion        | Type | Points | Required | Passes if …                                                                                                                                                                 |
+| ---------------- | ---- | -----: | :------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `story-format`   | Rule |     10 |    ✅    | "As a [role], I want [goal] so that [benefit]", a German equivalent, or role, want and benefit words anywhere in the text                                                   |
+| `story-context`  | Rule |     10 |    ✅    | Product and target audience are named as whole words, e.g. `Context: Customer Portal, residential customers`                                                                |
+| `epic-link`      | Rule |     10 |    –     | An issue reference such as `#1` is present; with several references, an epic context word is required. Recommended for traceability; whether the epic exists is not checked |
+| `ac-presence`    | Rule |     10 |    ✅    | At least two acceptance criteria are present, at least one of which covers an error, empty-state or permission case                                                         |
+| `story-links`    | Rule |     10 |    –     | Always passes for a non-empty body; detected dependency links are reported as a hint                                                                                        |
+| `ac-testability` | AI   |     17 |    ✅    | Criteria are clear, measurable and testable, without using vague terms                                                                                                      |
+| `size-risk`      | AI   |     17 |    –     | The model rates the size as S or M; L and XL fail. A risk signal, not an estimate or team commitment                                                                        |
+| `business-value` | AI   |     16 |    –     | User, need and benefit are recognizable; business KPIs are not required at first                                                                                            |
+
+Worked example, issue #3 (10/100): Only `story-links` passes, because the body is not empty. The other seven criteria fail, four of them are required; so the Ready Gate also fails.
+
+### Criteria for all types
+
+<details>
+<summary>Epic, task and bug: criteria and required flags</summary>
+
+#### **Epic** (Epics have no acceptance criteria, so `ac-testability` does not apply.)
+
+| Criterion                                                      | Type | Points | Required |
+| -------------------------------------------------------------- | ---- | -----: | :------: |
+| `goal-statement` (goal section with at least five words)       | Rule |     15 |    ✅    |
+| `benefit-statement` (benefit section with at least five words) | Rule |     15 |    ✅    |
+| `story-list` (at least two child stories)                      | Rule |     10 |    ✅    |
+| `size-risk` (S or M)                                           | AI   |     17 |    ✅    |
+| `epic-goal` (goal describes an outcome, not an activity)       | AI   |      8 |    ✅    |
+| `epic-benefit` (benefit is understandable, ideally measurable) | AI   |      8 |    ✅    |
+
+#### **Task**
+
+| Criterion                                                                                              | Type | Points | Required |
+| ------------------------------------------------------------------------------------------------------ | ---- | -----: | :------: |
+| `technical-scope` (at least two list items with an action verb)                                        | Rule |     15 |    ✅    |
+| `justification` (justification with a concrete trigger: EOL/date, security, performance or compliance) | Rule |     10 |    ✅    |
+| `impact-analysis` (two of three: affected systems, downtime/window, risks)                             | Rule |     10 |    ✅    |
+| `rollback-plan` (rollback section with two of four: procedure, test, time estimate, runbook location)  | Rule |     10 |    ✅    |
+| `ac-presence`                                                                                          | Rule |      5 |    –     |
+| `ac-testability`                                                                                       | AI   |     20 |    ✅    |
+| `size-risk` (S or M)                                                                                   | AI   |     15 |    ✅    |
+| `technical-feasibility`                                                                                | AI   |     10 |    ✅    |
+| `rollback-risk`                                                                                        | AI   |      5 |    –     |
+
+#### **Bug**
+
+| Criterion                                                         | Type | Points | Required |
+| ----------------------------------------------------------------- | ---- | -----: | :------: |
+| `reproduction-steps` (at least two numbered steps)                | Rule |     15 |    ✅    |
+| `expected-vs-actual`                                              | Rule |     15 |    ✅    |
+| `environment-info` (two of: browser, OS, version, device)         | Rule |     10 |    ✅    |
+| `ac-presence`                                                     | Rule |     10 |    –     |
+| `ac-testability`                                                  | AI   |     20 |    ✅    |
+| `size-risk` (S or M)                                              | AI   |     15 |    ✅    |
+| `severity` (Critical/Major/Minor, justified by the stated impact) | AI   |     10 |    ✅    |
+| `reproducibility` (Always/Sometimes/Rarely)                       | AI   |     10 |    –     |
+
+Epic adds up to 73 points, bug to 105 points. Scores are therefore normalized to 100 (achieved ÷ achievable points). Stories and tasks add up to 100 points; there, normalization changes nothing.
+
+</details>
+
+---
+
+## Architecture
+
+A CLI pipeline with a rule set, AI checks via Ollama and a human-in-the-loop step.
+
+```txt
+PO
+ │
+ ▼
+Node.js CLI (phrom)
+ │
+ ├── GitHub REST API (read-only) ─► GitHub Issues
+ │
+ ├── Rules Engine
+ │   ├── Criteria ────────────────► references/criteria/*.json (criteria-loader.js)
+ │   ├── Deterministic checks ────► checks.js
+ │   └── Score + Ready Gate ──────► agent.js (evaluate; historical file name)
+ │
+ ├── AI Engine ───────────────────► model.js → ollama-client.js → Ollama (OLLAMA_HOST)
+ │
+ ├── Improvement Engine ──────────► improve.js → model-improve.js
+ │   └── Reference examples ──────► references/quality/*.json
+ │
+ └── Filesystem ──────────────────► output/
+     ├── reports/
+     ├── improvement-suggestions/
+     ├── summary-*.md
+     └── results-*.json
+ │
+ ▼
+PO Review → Manual transfer → GitHub Issue
+```
+
+**It is a pipeline, not an agent.** Phrom runs fixed steps: read issues, run deterministic checks, run AI checks, apply the Ready Gate, optionally generate an improvement draft and save results. The model never decides which step runs next. An agent with tool selection, state management and resumption can follow later as a deliberate extension; see [Roadmap](#limitations-and-roadmap).
+
+**Improvement drafts** (improvements) use one-shot prompting: for each issue type, the model receives a reference example from `references/quality/*.json`. No model weights are trained or adjusted.
+
+### Assistance boundaries
+
+Phrom makes statements about:
+
+- whether defined criteria are met,
+- possible improvements,
+- concrete improvement suggestions.
+
+Phrom makes **no** decisions about:
+
+- prioritization of issues,
+- effort estimation or sprint commitment,
+- technical feasibility,
+- sprint readiness,
+- acceptance of improvement suggestions.
+
+"Ready for refinement" is not "ready for sprint planning". The AI criteria `size-risk` and `technical-feasibility` are preparation signals: `size-risk` has the model rate a size S/M/L/XL on a day-based scale, but the result is a risk signal and not an estimate the team has to adopt. Whether an item is understood, sensibly sliced and feasible is decided by the Product Owner and the team. The team can discuss any item regardless of its traffic-light status.
+
+---
+
+## Privacy and security
+
+- **Where the AI runs:** Every AI call goes to the Ollama server at `OLLAMA_HOST` (default: `http://127.0.0.1:11434`) with the model in `MODEL_NAME`. With a local host and a locally run model, backlog content stays on your machine and is not sent to an LLM provider.
+- **When content leaves the machine:** If `OLLAMA_HOST` points to a different machine, or `MODEL_NAME` is an Ollama cloud model (suffix `:cloud` / `-cloud`, runs on ollama.com), issue content is sent there. The demo detects both cases and does not label them as "local".
+- **GitHub read access:** Phrom reads issues from your repository via the GitHub REST API. The analysis pipeline (`src/`) contains no function that writes to GitHub. But read-only access is not general data protection: see the following points on tokens and `output/`.
+- **Minimal permissions:** For a private repository, a fine-grained personal access token for this one repository with _Issues: Read-only_ (`GITHUB_TOKEN`) is enough. Public repositories need no token; without a token, the lower API limit applies.
+- **Separate write access:** The seed scripts are separate helper tools and the only write operations. They run via the GitHub CLI, remove `GITHUB_TOKEN` from its environment and use the account from `gh auth login`. The analysis token is never used for write access.
+- **Secrets:** Tokens are stored in `.env` and must not be committed.
+- **Output contains issue content:** `results-*.json` and the reports contain issue text. Treat `output/` like the backlog itself.
+- **Demo without a token:** The demo needs no private access. Without a token, however, the anonymous GitHub limit of 60 requests per hour applies, and a demo run needs about 25 requests; a third run within the same hour therefore hits the limit. Any token raises the limit.
+
+### Phrom talks to GitHub in two ways
+
+```txt
+Analysis (run, status, select, improve, demo)       Seeding (seed.js, labels.js)
+────────────────────────────────────────────       ─────────────────────────────
+Node.js process                                    Node.js starts child process "gh"
+   │                                                  │
+   ▼                                                  ▼
+@octokit/rest  (src/tools.js, demo.js)             GitHub CLI
+   │                                                  │
+   │ reads ONLY: process.env.GITHUB_TOKEN             │ reads: GITHUB_TOKEN (removed),
+   │                                                  │ otherwise its own login from
+   │                                                  │ ~/.config/gh or Keychain
+   ▼                                                  ▼
+GitHub REST API                                     GitHub API
+
+```
+
+---
+
+## Persistence and review
+
+Results are saved as Markdown after each issue, and for `run` also as JSON. The review flow:
+
+1. The Product Owner opens `output/reports/issue-N-report-*.md`. The report shows the evaluated issue text, passed and failed criteria with short reasons, the score table and the Ready Gate.
+2. `phrom improve <n>` also creates `output/improvement-suggestions/issue-N-improvements-*.md`: one suggestion per gap (problem, current state, recommended wording) plus a revised draft.
+3. The Product Owner applies suggestions manually and runs `phrom improve <n>` again to check the result.
+
+Each criterion is marked as rule-based (deterministic) or AI (ai). There is no confidence value for AI assessments and no "re-check" command. If a run crashes, it has to be restarted; reports already written remain in `output/`.
+
+---
+
+## Quality measurement
+
+This section describes the **technical** check: does Phrom detect the defects that the rule set defines? Whether this helps Product Owners in their daily work is a different question, see [Validation status](#validation-status).
+
+Phrom is based on the hypothesis that a locally run model is good enough for content checks such as AC testability, size risk and business value. **This is a hypothesis, not a proven result.**
+
+**Test set:** 18 issues in `seed/issues.json` (7 stories, 3 epics, 4 tasks, 4 bugs), each with expected findings. Each type has at least one good control issue as well as weak, oversized or complex issues. The set is self-made and small, especially for task and bug.
+
+**Rule-based checks** (offline, all 18 issues, `node scripts/eval-seed.js`, 2026-10-08):
+
+- 18 of 18 issues match the expectations exactly.
+- All 31 expected gaps are found.
+- There are no additional findings.
+
+**Full pipeline including AI** (`node scripts/eval-seed.js --ai`, 2026-10-08, all 18 issues):
+
+- All 45 checkable expected gaps are found. The test set expects 49 in total; for four of them (in the epics: context, scope boundaries twice, success measure) there is no criterion yet.
+- None of the five control issues gets a finding; all reach 100/100 and 🟢.
+- There are 15 additional findings, all from AI criteria and all for issues that are weak anyway. Eight follow necessarily from the criteria definitions (an issue without acceptance criteria also fails `ac-testability`), four are justified on the merits, three are a matter of judgment. The seed expectations are incomplete at these points.
+- 10 of 18 issues match the expectations exactly. If the eight necessary follow-on findings were added to the expectations, it would be 13 of 18.
+
+**Reproducibility:** The AI checks run with temperature 0, `top_k` 1 and a fixed seed. On 2026-10-08, the seed evaluation (reads `seed/issues.json`) and `phrom run` (reads the demo repository via the GitHub API) produced identical scores, statuses and findings for all 18 shared issues. Nine repetitions of individual issues via `select`, `improve` and the demo were identical except for the timestamp. This applies to identical input on the same system. How strongly judgments near a threshold react to different wording has not been measured.
+
+**Why this is not an independent measurement:**
+
+- The prompts were tuned on the same issues. For example, the size check initially rated the oversized story "Manage account settings" as medium-sized, and the value check initially demanded metrics for one story.
+- The expectations were written by the author.
+- Only one model was tested, on one test system.
+
+A separate test set and a model comparison are still pending.
+
+**Measurement basis:** The seed evaluation, the demo, `phrom run` and all `improve` runs are from 2026-10-08 and the same code state (rule set 0.3.1; a commit hash was not recorded). The demo repository contains the 18 seed issues with the same numbers (#1–#18) plus #19, an issue without a label for testing type detection. The analysis and the weaknesses on both sides, the tests and the product, are in the test report `discovery/evidenz-2026-10-08.md` (German).
+
+```bash
+node scripts/eval-seed.js         # rules only, a few seconds
+node scripts/eval-seed.js --ai    # full pipeline including AI, several minutes
+```
+
+---
+
+## Validation status
+
+**Technically checked** (in the documented MVP context: self-made test set of 18 issues, model `qwen3:30b-instruct`, one CPU test server):
+
+- GitHub issues from a public repository are read in read-only mode and evaluated.
+- Fixed rules and AI assessments work together in one pipeline; score, Ready Gate and reports are produced in a traceable way.
+- In the test set, Phrom finds all checkable expected gaps (45 of the 49 expected gaps have a criterion) without flagging the good control issues. The seed file and GitHub produce identical results; with identical input, the evaluation is reproducible.
+- Good control issues get no draft from `improve`. Drafts for stories, an epic and a task are recorded; they show known defects, see [Limitations](#limitations-and-roadmap).
+- An issue without a label is assigned a type and evaluated (one example, not evaluated).
+- The AI runs on the same machine as Phrom, without an LLM provider.
+
+**Not yet demonstrated:**
+
+- transferability to other people's backlogs;
+- operation with private repositories;
+- drafts for bugs; also not recorded on the test day are `phrom filter`, `status` and `list`, as well as an Ollama outage;
+- the reliability of the drafts: there is no automated test for it;
+- above all: **the benefit for Product Owners in real day-to-day work.**
+
+A 🟢 means that an item meets the criteria of the rule set; it is not a sprint commitment.
+
+**Open questions I will check next:**
+
+1. **Relevant gaps:** Does Phrom show gaps that a Product Owner would have missed in their own preparation and would fix before refinement? This is not about the number of findings, but about their relevance.
+2. **Net effort:** Is the active working time with Phrom (reading the report, discarding false findings, correcting) not greater than without it? The waiting time for the model is considered separately.
+3. **Usable drafts:** Can an improvement draft be turned into a usable version with less effort than writing one's own text, and are the details invented by the model detected in the process?
+4. **Repeat use:** Does a Product Owner actually use Phrom again for another real preparation? What counts is observed behavior, not stated intent.
+
+**First validation round:**
+
+- **Participants:** two to three Product Owners who prepare backlog items themselves.
+- **Format:** one moderated session of about 60 minutes via video call with prepared, synthetic example issues; optionally a short follow-up check after four weeks.
+- **Requirements:** no installation, no confidential data.
+
+The round serves to test assumptions and prepare the next product decision; it is not statistical proof. If you would like to take part: [phrom@mariuskalder.de](mailto:phrom@mariuskalder.de) or a direct message on LinkedIn.
+
+---
+
+## Limitations and roadmap
+
+### Known limitations (MVP)
+
+- **Small, self-made test set:** four issues each for task and bug, three epics, one good control issue per type (story: two); tested with one model on one system. Four expected epic gaps have no criterion.
+- **Demo repository and test set:** The demo repository contains the 18 seed issues with the same numbers plus #19 without a label.
+- **Heuristics:** Deterministic checks detect keywords and patterns, not meaning. They are designed for German and English. `story-context` is strict: the product must be named explicitly. `ac-presence` also counts statements with "must"/"should", so a single sentence with "should" counts as one criterion. `technical-scope` also counts bold lines such as `**Task:** Migrate …` as a work item. `impact-analysis` reports "Impact section exists" as soon as, for example, the word "rollback" appears, and when it finds one element, it also lists that same element as missing; the result is correct in the recorded cases, but the reasoning is misleading.
+- **Drafts invent details:** The instructions forbid it; issue numbers, percentages, ISO dates and quarters are replaced automatically. Everything else is not caught. In the drafts from October 8, the model invented response times ("within 2 seconds", "within 1 second"), error messages and, for epic #12, complete scope, out-of-scope and risk lists, a target audience and example names in placeholders ("Alex Rivera, Senior Product Manager"). Drafts are suggestions for review.
+- **Drafts copy content from the reference example:** The task draft for #14 consists mostly of scope items, risks and verification steps from `references/quality/task-reference.json`; the story draft for #11 copies all three acceptance criteria almost word for word from `story-reference.json`. The prompt forbids this; the ban does not hold reliably. Because the story reference example is a worked-out version of a test set issue, story drafts look better on this test set than they are.
+- **Drafts can lose existing facts:** In the draft for #11, the existing context ("Self-Service Customer Portal, residential customers, part of Epic #1") and the role "customer" were replaced by placeholders; in #5, the role was replaced as well. Every draft must therefore also be checked against the original.
+- **Fixed example texts:** The default suggestion for `ac-testability` on stories always mentions a PDF download, even for login or account settings.
+- **Drafts vary:** Checks run at temperature 0, drafts at 0.3. Two runs can produce different drafts; how much they differ has not been measured.
+- **No per-issue status:** There is no status `pending`, `running`, `done`, `failed` or `incomplete`. If Ollama fails, the issue is recorded fail-closed as 🔴, and the report says that the AI checks did not run.
+- **No resume:** AI calls are retried twice, after 2 s and 4 s. A failed issue is not retried later, and a crashed `phrom run` starts again from the beginning.
+- **Issue numbers:** Reports and commands use GitHub issue numbers, which change after a reset of the demo repository.
+- **Static references:** Improvements use fixed reference JSON files, not similarity search. If the example does not fit the content of the issue (e.g. a worked-out database migration as a template for an issue consisting of a single sentence), the risk of copied content increases.
+- **Configuration via JSON and `.env`:** Criteria, required flags and reference examples are in `references/criteria/*.json` and `references/quality/*.json`; the model is set via `MODEL_NAME` (default: `qwen3:30b-instruct`).
+- **No UI:** Only CLI and Markdown reports.
+
+### Roadmap
+
+- **First qualitative validation round with Product Owners:** see [Validation status](#validation-status). Its result decides on the other items.
+- **Independent evaluation:** separate, manually rated test set and comparison of different models
+- **Status tracking, retry and resume** for long runs, including an `incomplete` status
+- **Persistence in PostgreSQL** instead of files
+- **Safer drafts:** reference examples without transferable facts, a check for sentences copied word for word, comparison with the facts of the original
+- **Reference matching** via similarity search instead of static reference files
+- **PO review UI** for approving suggestions and **configuration UI** for criteria and model
+- **Optional write-back to GitHub** (e.g. comments), only after explicit approval by the Product Owner and with its own decision record
+
+---
+
+## Background: problem, vision and target audience
+
+### Problem
+
+Typical refinement problems can be summarized in four groups. This grouping is the author's own synthesis of the following sources:
+
+| Group                                   | Source                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Poorly prepared items                   | [Age of Product: Product Backlog and Refinement Anti-Patterns](https://age-of-product.com/28-product-backlog-anti-patterns/) (missing acceptance criteria, items that are little more than a title); [Alignlee: User Story Readiness Checklist](https://alignlee.com/en/articles/user-story-readiness-checklist-backlog-refinement) |
+| Wrong level of detail at the wrong time | [Humanizing Work: Avoiding the Detail Trap](https://www.humanizingwork.com/avoiding-the-detail-trap/)                                                                                                                                                                                                                               |
+| Overloaded backlog                      | [Age of Product: Product Backlog and Refinement Anti-Patterns](https://age-of-product.com/28-product-backlog-anti-patterns/) (oversized product backlog)                                                                                                                                                                            |
+| Poorly run meeting                      | [Agile Pain Relief: Product Backlog Refinement Hell](https://agilepainrelief.com/blog/product-backlog-refinement-hell-solutions/)                                                                                                                                                                                                   |
+
+> Phrom only addresses the first group: poorly prepared items.
+
+### Vision
+
+Backlog refinement should spend its time on what only a team can do: build shared understanding, estimate, and decide on the technical approach. Part of this time is lost to work that could be done beforehand: unclear wording, missing acceptance criteria and items that are too large.
+
+The vision is an assistant that automates the craft work but leaves judgment with people. Phrom does **not** prioritize, does **not** estimate and does **not** decide on technical feasibility. It helps items arrive at refinement better prepared.
+
+Phrom is also a demonstration project. It shows an AI-assisted tool with a transparent rule set, a self-hosted model and human approval, built without a framework and without depending on a cloud LLM. It does not claim that AI replaces Product Owners.
+
+**Architecture decisions:**
+
+- ADR-001: [GitHub Issues as the Data Source](adr/en/ADR-001-github-issues-data-source.en.md)
+- ADR-002: [Separate Repositories for Code and Demo Backlog](adr/en/ADR-002-separate-repositories.en.md)
+- ADR-003: [CLI Pipeline with Rules Engine, Local AI, and Human-in-the-Loop](adr/en/ADR-003-cli-pipeline-architecture.en.md)
+- ADR-004: [Seed and Reset Scripts for the Demo Backlog](adr/en/ADR-004-seed-and-reset-scripts.en.md)
+
+### Target audience
+
+**Primary: Product Owners** who:
+
+- maintain their backlog in GitHub Issues,
+- have to sharpen items before every refinement without a tooling budget,
+- want control over their data and do not want to send backlog content to an LLM provider,
+- want to review and approve suggestions instead of receiving automated changes.
+
+Typical context: a Scrum team, a backlog with a few dozen open items, and refinement meetings that start with wording questions instead of content decisions.
+
+**Secondary:** technically interested people who want to see how an AI-assisted tool with a rule set, a self-hosted model and an approval step can be built.
+
+**Not the target audience:** teams that want to automate prioritization, estimation or sprint planning, and users who want changes without human review.
+
+### Usage assumptions
+
+- The backlog is in GitHub Issues.
+- Items carry exactly one type label: `type:epic`, `type:story`, `type:task` or `type:bug`.
+- The team agrees on a shared rule set and decides which criteria are required.
+- A locally run model is good enough for the task (hypothesis; see [Quality measurement](#quality-measurement)).
+- Phrom saves Product Owners net preparation effort (open; see [Validation status](#validation-status)).
+
+---
+
+## License
+
+© 2026 Marius Kalder. All rights reserved.
+
+This repository is publicly accessible for viewing and educational purposes only. The code demonstrates an architectural approach to AI-assisted backlog refinement.
+
+**You may:**
+
+- view and study the code,
+- fork the repository for personal learning purposes,
+- reference it in portfolios or professional discussions.
+
+**You may not:**
+
+- use the code commercially without permission,
+- redistribute it as part of a product,
+- present the work as your own.
+
+For license inquiries: [phrom@mariuskalder.de](mailto:phrom@mariuskalder.de)
+
+---
+
+_This README describes the current state (MVP, version 1.0.0, rule set 0.3.1)._
