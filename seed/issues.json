@@ -1,6 +1,6 @@
 [
   {
-    "number": 1,
+    "seedId": 1,
     "title": "Invoice self-service",
     "labels": [
       "type:epic",
@@ -14,7 +14,7 @@
     }
   },
   {
-    "number": 2,
+    "seedId": 2,
     "title": "Download invoice as PDF",
     "labels": [
       "type:story",
@@ -28,7 +28,7 @@
     }
   },
   {
-    "number": 3,
+    "seedId": 3,
     "title": "Improve login",
     "labels": [
       "type:story",
@@ -39,10 +39,10 @@
       "type": "story",
       "findings": [
         "story-format",
-        "context",
+        "story-context",
         "epic-link",
         "ac-presence",
-        "value",
+        "business-value",
         "ac-testability",
         "size-risk"
       ],
@@ -50,7 +50,7 @@
     }
   },
   {
-    "number": 4,
+    "seedId": 4,
     "title": "Reset password",
     "labels": [
       "type:story",
@@ -60,14 +60,14 @@
     "expected": {
       "type": "story",
       "findings": [
-        "context",
+        "story-context",
         "epic-link"
       ],
       "note": "weak-missing-context"
     }
   },
   {
-    "number": 5,
+    "seedId": 5,
     "title": "Manage account settings",
     "labels": [
       "type:story",
@@ -77,7 +77,7 @@
     "expected": {
       "type": "story",
       "findings": [
-        "context",
+        "story-context",
         "epic-link",
         "ac-presence",
         "size-risk"
@@ -86,7 +86,7 @@
     }
   },
   {
-    "number": 6,
+    "seedId": 6,
     "title": "Modernize the portal",
     "labels": [
       "type:epic",
@@ -108,7 +108,7 @@
     }
   },
   {
-    "number": 7,
+    "seedId": 7,
     "title": "View invoice overview",
     "labels": [
       "type:story",
@@ -117,14 +117,12 @@
     "body": "**Story:** As a residential customer, I want to view a list of my available invoices so that I can see what I owe.\n\n**Context:** Self-Service Customer Portal, residential customers, part of Epic #1.\n\n**Acceptance Criteria**\n- [ ] Given I am signed in, when I open the invoices page, then I see a list of my invoices sorted by date descending.\n- [ ] Given I have no invoices, when I open the page, then I see \"No invoices available\".\n- [ ] Given I select an invoice, when I click it, then I see the invoice details.",
     "expected": {
       "type": "story",
-      "findings": [
-        "epic-link"
-      ],
-      "note": "weak-missing-epic-link"
+      "findings": [],
+      "note": "good-control"
     }
   },
   {
-    "number": 8,
+    "seedId": 8,
     "title": "Change payment method",
     "labels": [
       "type:story",
@@ -140,21 +138,27 @@
     }
   },
   {
-    "number": 9,
-    "title": "Database migration to PostgreSQL 16",
+    "seedId": 9,
+    "title": "Database migration to PostgreSQL 18",
     "labels": [
       "type:task",
       "demo-seed"
     ],
-    "body": "**Task:** Migrate the database from PostgreSQL 15 to PostgreSQL 16.\n\n**Result:** Database runs on PostgreSQL 16 with all data intact.\n\n**Done when:**\n- [ ] Backup is created\n- [ ] Migration is tested in staging\n- [ ] Production migration is completed",
+    "body": "**Task:** Migrate the database from PostgreSQL 16 to PostgreSQL 18.\n\n**Result:** Database runs on PostgreSQL 18 with all data intact.\n\n**Done when:**\n- [ ] Backup is created\n- [ ] Migration is tested in staging\n- [ ] Production migration is completed",
     "expected": {
       "type": "task",
-      "findings": [],
-      "note": "out-of-scope"
+      "findings": [
+        "technical-scope",
+        "justification",
+        "impact-analysis",
+        "rollback-plan",
+        "ac-presence"
+      ],
+      "note": "weak-task"
     }
   },
   {
-    "number": 10,
+    "seedId": 10,
     "title": "PDF download fails on mobile Safari",
     "labels": [
       "type:bug",
@@ -163,12 +167,16 @@
     "body": "**Bug:** PDF download fails on mobile Safari.\n\n**Steps to reproduce:**\n1. Open the invoices page on mobile Safari\n2. Click \"Download PDF\"\n\n**Expected:** Download starts\n**Actual:** Error message appears\n\n**Environment:** iOS 17, Safari",
     "expected": {
       "type": "bug",
-      "findings": [],
-      "note": "out-of-scope"
+      "findings": [
+        "ac-presence",
+        "ac-testability",
+        "reproducibility"
+      ],
+      "note": "weak-no-ac"
     }
   },
   {
-    "number": 11,
+    "seedId": 11,
     "title": "Download invoice",
     "labels": [
       "type:story",
@@ -184,7 +192,7 @@
     }
   },
   {
-    "number": 12,
+    "seedId": 12,
     "title": "Digital customer experience",
     "labels": [
       "type:epic",
@@ -199,6 +207,110 @@
         "epic-oversize-risk"
       ],
       "note": "oversized-epic"
+    }
+  },
+  {
+    "seedId": 13,
+    "title": "Database migration to PostgreSQL 16",
+    "labels": [
+      "type:task",
+      "demo-seed"
+    ],
+    "body": "**Task:** Migrate the billing database from PostgreSQL 14 to PostgreSQL 16.\n\n**Technical Scope:**\n- Upgrade the billing database cluster to PostgreSQL 16\n- Migrate schema and data with pg_upgrade\n- Update the connection settings of the billing API\n\n**Justification:** PostgreSQL 14 reaches end of life in November 2026. After that date no security patches are published, which is a compliance risk for payment data.\n\n**Impact:** Affected systems: billing API and invoice export job. Planned downtime: 30 minutes in the Sunday maintenance window. Risk: incompatible custom extensions. Teams: Backend, DevOps.\n\n**Rollback Plan:**\n1. Stop the billing API.\n2. Restore the backup taken before the migration.\n3. Restart the API and verify an invoice export.\nThe procedure was tested in staging and takes about 15 minutes. Runbook: wiki page \"DB migration\".\n\n**Verification:**\n- [ ] Given the migration is complete, when the invoice export runs, then all invoices of the last 12 months are returned.\n- [ ] Given the migration fails in staging, when the rollback procedure is executed, then the billing API is available again within 15 minutes.",
+    "expected": {
+      "type": "task",
+      "findings": [],
+      "note": "good-control"
+    }
+  },
+  {
+    "seedId": 14,
+    "title": "Update the database",
+    "labels": [
+      "type:task",
+      "demo-seed"
+    ],
+    "body": "We should update the database soon.",
+    "expected": {
+      "type": "task",
+      "findings": [
+        "technical-scope",
+        "justification",
+        "impact-analysis",
+        "rollback-plan",
+        "ac-presence",
+        "size-risk"
+      ],
+      "note": "weak-task"
+    }
+  },
+  {
+    "seedId": 15,
+    "title": "Modernize infrastructure",
+    "labels": [
+      "type:task",
+      "demo-seed"
+    ],
+    "body": "**Task:** Migrate all services to Kubernetes, update all databases, and implement a service mesh.\n\n**Justification:** The current virtual machines reach end of life in 2027 and have open security findings.\n\n**Technical Scope:**\n- Migrate all services to Kubernetes\n- Update all databases to the current major version\n- Implement a service mesh for all service-to-service traffic\n\n**Rollback Plan:** Keep the old virtual machines running in parallel until every service is verified. The restore from backup was tested in staging and takes about 2 hours.\n\n**Verification:**\n- [ ] Given all services run on Kubernetes, when the smoke tests run, then all tests pass.\n- [ ] Given a service fails after the migration, when the rollback is triggered, then traffic returns to the old virtual machines.",
+    "expected": {
+      "type": "task",
+      "findings": [
+        "impact-analysis",
+        "size-risk"
+      ],
+      "note": "oversized-task"
+    }
+  },
+  {
+    "seedId": 16,
+    "title": "PDF download fails on mobile Safari (iOS 16)",
+    "labels": [
+      "type:bug",
+      "demo-seed"
+    ],
+    "body": "**Bug:** The PDF download of an invoice fails on mobile Safari.\n\n**Steps to reproduce:**\n1. Sign in to the customer portal on an iPhone.\n2. Open the invoices page and select the latest invoice.\n3. Tap \"Download PDF\".\n\n**Expected:** The PDF download starts within 3 seconds.\n**Actual:** The message \"Download failed\" appears and no file is saved.\n\n**Environment:** iPhone 13, iOS 16.5, Safari 16.5\n\n**Severity:** Major – customers cannot download invoices on iPhones and there is no workaround in the app.\n\n**Reproducibility:** Always – it occurs on every attempt with the steps above.\n\n**Acceptance Criteria:**\n- [ ] Given I am signed in on mobile Safari, when I tap \"Download PDF\", then the download starts within 3 seconds.\n- [ ] Given the invoice has no PDF, when I tap \"Download PDF\", then I see the message \"PDF not available\".",
+    "expected": {
+      "type": "bug",
+      "findings": [],
+      "note": "good-control"
+    }
+  },
+  {
+    "seedId": 17,
+    "title": "Download is broken",
+    "labels": [
+      "type:bug",
+      "demo-seed"
+    ],
+    "body": "The download doesn't work.",
+    "expected": {
+      "type": "bug",
+      "findings": [
+        "reproduction-steps",
+        "expected-vs-actual",
+        "environment-info",
+        "ac-presence",
+        "severity",
+        "reproducibility"
+      ],
+      "note": "weak-bug"
+    }
+  },
+  {
+    "seedId": 18,
+    "title": "Intermittent login failures across all platforms",
+    "labels": [
+      "type:bug",
+      "demo-seed"
+    ],
+    "body": "**Bug:** Users sometimes cannot log in on web, iOS, and Android.\n\n**Steps to reproduce:**\n1. Open the login page.\n2. Enter valid credentials and tap \"Sign In\".\n\n**Expected:** The user is signed in and sees the dashboard.\n**Actual:** The login fails with a generic error. The cause may be the authentication service, session management, or one of the clients.\n\n**Environment:** Chrome 118, iOS 17.1, Android 14\n\n**Severity:** Major – affected users cannot use the portal.\n\n**Acceptance Criteria:**\n- [ ] Given valid credentials, when I sign in on web, iOS or Android, then I reach the dashboard within 3 seconds.\n- [ ] Given invalid credentials, when I sign in, then I see the message \"Invalid credentials\".",
+    "expected": {
+      "type": "bug",
+      "findings": [
+        "reproducibility",
+        "size-risk"
+      ],
+      "note": "complex-bug"
     }
   }
 ]
