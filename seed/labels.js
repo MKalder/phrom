@@ -1,41 +1,41 @@
 #!/usr/bin/env node
 /**
- * labels.js – Legt die benötigten Labels im Demo-Repo an.
+ * labels.js – Creates the required labels in the demo repository (write operation).
  *
- * Voraussetzungen:
- * - GitHub CLI (`gh`) ist installiert und eingeloggt (`gh auth login`)
- * - Das Demo-Repo existiert (z. B. DEIN-USER/phrom-backlog-demo)
+ * Requirements:
+ * - GitHub CLI (`gh`) is installed and logged in (`gh auth login`), or SEED_GITHUB_TOKEN is set
+ * - The demo repository exists (e.g. YOUR-USER/phrom-backlog-demo)
  *
- * Nutzung:
- *   cd seed
- *   node labels.js
+ * Usage:
+ *   node seed/labels.js
  *
- * Das Skript legt die Labels type:epic, type:story, type:task, type:bug und demo-seed an.
- * Bereits existierende Labels werden aktualisiert (Farbe, Beschreibung).
+ * Creates the labels type:epic, type:story, type:task, type:bug and demo-seed.
+ * Existing labels are updated (color, description).
+ * Permissions: the analysis token (GITHUB_TOKEN) is NOT used – see gh-env.js.
  */
 
 
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import 'dotenv/config';  // Lädt .env
+import 'dotenv/config';  // loads .env
+import { ghEnv } from './gh-env.js';
 
 
-// __dirname in ES Modules nachbauen
+// __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 
 const GITHUB_OWNER = process.env.GITHUB_OWNER;
 const GITHUB_REPO = process.env.GITHUB_REPO;
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
-
-// Validierung
-if (!GITHUB_OWNER || !GITHUB_REPO || !GITHUB_TOKEN) {
-  console.error('❌ Fehler: Bitte .env konfigurieren (GITHUB_OWNER, GITHUB_REPO, GITHUB_TOKEN)');
+if (!GITHUB_OWNER || !GITHUB_REPO) {
+  console.error('❌ Error: please set GITHUB_OWNER and GITHUB_REPO in .env');
   process.exit(1);
 }
+
+const env = ghEnv();
 
 
 const REPO = `${GITHUB_OWNER}/${GITHUB_REPO}`;
@@ -69,7 +69,7 @@ for (const label of labels) {
         "-R",
         REPO,
       ],
-      { encoding: "utf8" }
+      { encoding: "utf8", env }
     ).trim();
 
 

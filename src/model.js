@@ -1,26 +1,33 @@
 /**
- * model.js – Ollama-Wrapper für Modell-Checks (vollständig, alle Typen).
- * 
- * Nutzt die offizielle ollama-Library für strukturierte Calls.
- * Konfiguration über .env:
- * OLLAMA_HOST=http://localhost:11434
- * MODEL_NAME=qwen3:30b-instruct
- * 
- * NOTE: Check-Namen entsprechen jetzt den Criteria-IDs (Kebab-Case).
+ * model.js – Ollama wrapper for the AI checks (all issue types).
+ *
+ * Uses the shared client from ollama-client.js, so OLLAMA_HOST and MODEL_NAME from .env
+ * are the host and model that are actually called.
+ *
+ * Check names are identical to the criterion IDs (kebab-case).
  */
 
-import ollama from "ollama";
+import { ollama, MODEL_NAME } from "./ollama-client.js";
+import { loadCriteria } from "./criteria-loader.js";
 
-const MODEL_NAME = process.env.MODEL_NAME || "qwen3:30b-instruct";
+// Keeps judgments tied to the issue text: models otherwise reason from general knowledge
+// (e.g. "Mobile Safari has known limitations …") and rate items on facts the issue never states.
+const GROUNDING =
+  "Judge only from the text of the issue. Do not assume technologies, platforms, systems or facts that the text does not mention.";
 
 /**
  * askModel(prompt, schema) – Führt einen Modell-Call mit Structured Output aus.
  */
 async function askModel(prompt, schema) {
-  const response = await ollama.chat({
+  // Streaming: a non-streaming call only returns response headers once the whole answer exists.
+  // Node's fetch (undici) aborts after 5 minutes without headers ("fetch failed"), e.g. when the
+  // model has to be reloaded first or the machine is slow. A stream starts delivering immediately.
+  const stream = await ollama.chat({
     model: MODEL_NAME,
     messages: [{ role: "user", content: prompt }],
     format: schema,
+    stream: true,
+    keep_alive: process.env.OLLAMA_KEEP_ALIVE || "30m", // default is 5 min, then the model is unloaded
     options: {
       temperature: 0,
       top_k: 1,
@@ -28,7 +35,12 @@ async function askModel(prompt, schema) {
     },
   });
 
-  return JSON.parse(response.message.content);
+  let content = "";
+  for await (const part of stream) {
+    content += part.message?.content ?? "";
+  }
+
+  return JSON.parse(content);
 }
 
 /**
@@ -109,20 +121,31 @@ false otherwise. Give a short reason (1-2 sentences, in the language of the issu
 /**
  * checkSizeRisk(issue) – Schätzt Aufwand/Risiko des Items.
  */
-export async function checkSizeRisk(issue) {
+export async function checkSizeRisk(issue, indicators = []) {
+  // The criteria spec defines size-risk by breadth ("too broad for one sprint"), not by effort in days.
+  const breadthRule = indicators.length
+    ? "\nDecide mainly by breadth: if none of the signs above clearly applies, answer S or M, even if the work is substantial. "
+      + "Answer L or XL only if one or more signs clearly apply or the text itself describes work that cannot fit into one sprint.\n"
+    : "";
+  const indicatorBlock = indicators.length
+    ? `\nSigns that an item is too broad for one sprint (rate it L or XL if one or more clearly apply):\n${indicators.map((i) => `- ${i}`).join("\n")}\n`
+    : "";
+
   const prompt = `You are an experienced software project lead estimating backlog items.
 Estimate the implementation effort and risk of this issue.
+${GROUNDING}
 Use the following scale:
 - S: small, well understood, < 1 day, low risk
 - M: medium, 1-3 days, some open questions
 - L: large, 3-10 days, significant uncertainty or dependencies
 - XL: too large, must be split, > 10 days or many unknowns
-
+${indicatorBlock}${breadthRule}
 ${issueBlock(issue)}
 
 Respond as JSON: size (S/M/L/XL) and a short reason (1-2 sentences, in the language of the issue).`;
 
-  return askModelWithRetry(prompt, SIZE_RISK_SCHEMA);
+  const result = await askModelWithRetry(prompt, SIZE_RISK_SCHEMA);
+  return { ...result, passed: result.size === "S" || result.size === "M" };
 }
 
 /**
@@ -131,8 +154,10 @@ Respond as JSON: size (S/M/L/XL) and a short reason (1-2 sentences, in the langu
  */
 export async function checkBusinessValue(issue) {
   const prompt = `You are a product owner reviewing a user story.
-Evaluate whether this story clearly communicates business value:
+Evaluate whether this story clearly communicates value for the user:
 a specific user or role, a concrete need, and an understandable benefit.
+A benefit stated from the user's point of view ("so that ...") is sufficient. Do not require business KPIs,
+metrics or company-level goals, and do not invent value that the text does not state.
 Vague stories like "improve X" without a stated benefit fail this check.
 
 ${issueBlock(issue)}
@@ -206,6 +231,7 @@ and a short reason (1-2 sentences, in the language of the issue).`;
 export async function checkTechnicalFeasibility(issue) {
   const prompt = `You are a senior engineer evaluating a technical task.
 Assess whether the technical approach is feasible and well-understood.
+${GROUNDING}
 
 Consider:
 - Is the technical scope clear and achievable?
@@ -249,6 +275,7 @@ false if rollback is untested or inadequate for the impact. Give a short reason.
  */
 export async function checkSeverity(issue) {
   const prompt = `You are a senior QA engineer assessing bug severity.
+${GROUNDING}
 Evaluate the severity of this bug based on:
 - Impact on users (how many affected?)
 - Impact on business (revenue, compliance, reputation)
@@ -261,7 +288,7 @@ Severity scale:
 
 ${issueBlock(issue)}
 
-Respond as JSON: { severity: "Critical"|"Major"|"Minor", passed: true if severity is clearly justified, false otherwise, reason: "1-2 sentences" }.`;
+Respond as JSON: { severity: "Critical"|"Major"|"Minor", passed: true ONLY if the issue itself states or clearly implies the impact (who is affected, business effect, workaround) that justifies the severity; false if the issue gives no impact information, even if you can guess a severity, reason: "1-2 sentences" }.`;
 
   const schema = {
     type: "object",
@@ -321,9 +348,13 @@ Respond as JSON: { reproducibility: "Always"|"Sometimes"|"Rarely"|"Unknown", pas
 export async function runModelChecks(issue, type) {
   const results = {};
 
-  // Common checks for all types
-  results["ac-testability"] = await checkAcTestability(issue);
-  results["size-risk"] = await checkSizeRisk(issue);
+  // Common checks. Epics have no acceptance criteria by design, so they skip ac-testability.
+  if (type !== "epic") {
+    results["ac-testability"] = await checkAcTestability(issue);
+  }
+  // Broadness indicators come from the criteria catalog, so the prompt follows the documented rule.
+  const sizeIndicators = loadCriteria(type)?.criteria?.find((c) => c.id === "size-risk")?.indicators ?? [];
+  results["size-risk"] = await checkSizeRisk(issue, sizeIndicators);
 
   // Type-specific checks
   if (type === "story") {
