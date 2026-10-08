@@ -1,13 +1,6 @@
 # folder
 reset_backlog
-docs-de
 node_modules
-case-study
-dor_refinement
-*deprecated
-*doc
-db
-references
 archive
 audit
 
@@ -15,9 +8,3 @@ audit
 .env
 
 # files
-workflow-issue-check.md
-phrom_cli.md
-phrom-workflow.md
-phrom_improve.md
-ASIS_IMPLEMENTATION.md
-phrom-referenz-abgleich-konzept.md
