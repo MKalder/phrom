@@ -490,23 +490,36 @@ const formalScores = parseFormalScores(statusOutput);
 
 const show = (value) => (value === null ? '?' : value);
 
-console.log(`  ${DOT.ready} ≥ 80 % of checks passed   ${show(high)}`);
-console.log(`  ${DOT.needsWork} 50–79 %                   ${show(partial)}`);
-console.log(`  ${DOT.notReady} < 50 %                    ${show(low)}`);
-
+// Same bands and counts as `phrom status` (taken from its summary block).
 const countsKnown = [high, partial, low].every((value) => value !== null);
 const assessedCount = countsKnown ? high + partial + low : issueCount;
+const width = String(assessedCount).length;
+const cell = (value) => String(show(value)).padStart(width);
 
-// Issues with at least one failed formal check (taken from the per-issue lines "det: p/t").
+// Per-issue lines "– <n>/50 (det: p/t)" of `phrom status`: which issues pass ALL formal checks.
 const formalKnown = formalScores.size > 0;
-const complete = [...formalScores.values()].filter((f) => f.total > 0 && f.passed === f.total).length;
+const formalValues = [...formalScores.values()];
+const complete = formalValues.filter((f) => f.total > 0 && f.passed === f.total).length;
 const withGaps = formalKnown ? formalScores.size - complete : null;
+// The ≥ 80 % band also contains issues with a gap (e.g. 4 of 5 checks passed).
+const highWithGaps = formalValues.filter((f) => f.score >= 40 && f.passed < f.total).length;
+// Show the split only if it adds up to the band from the status summary.
+const showSplit = formalKnown && high !== null && complete + highWithGaps === high;
+
+console.log(`  ${DOT.ready} ≥ 80 % of checks passed   ${cell(high)}`);
+if (showSplit) {
+    console.log(dim(`    ├ ${'all checks passed'.padEnd(24)}${cell(complete)}`));
+    console.log(dim(`    └ ${'with gaps'.padEnd(24)}${cell(highWithGaps)}`));
+}
+console.log(`  ${DOT.needsWork} 50–79 %                   ${cell(partial)}`);
+console.log(`  ${DOT.notReady} < 50 %                    ${cell(low)}`);
+console.log(`    ${'Total'.padEnd(26)}${cell(assessedCount)}`);
 
 if (formalKnown) {
-    console.log(dim(`\n  ${complete} issues pass all formal checks, ${withGaps} have at least one formal gap.`));
-    console.log(dim('  Formal pre-check only – not a readiness verdict. The AI analysis below assesses'));
-    console.log(dim('  semantic aspects: testability, value and size risk.'));
+    console.log(dim(`\n  ${withGaps} of ${formalScores.size} issues have at least one formal gap.`));
 }
+console.log(dim('  Formal pre-check only – not a readiness verdict. The AI analysis below assesses'));
+console.log(dim('  semantic aspects: testability, value and size risk.'));
 
 // ============================================================================
 // 3. AI ANALYSIS
